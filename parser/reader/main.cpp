@@ -10,6 +10,7 @@
 #include "Watch.h"
 #include "ArgParser.h"
 #include "LefDefParser.h"
+#include "PlacementStructure.h"
 
 #include <iostream>
 #include <sstream>    // for istringstream
@@ -53,14 +54,12 @@ int main (int argc, char* argv[])
     auto& ldp = my_lefdef::LefDefParser::get_instance();
 
     // 5. 依序讀入各個 LEF
-    {
-        istringstream iss(filename_lef_list);
-        string lef_file;
-        while (getline(iss, lef_file, ',')) {
-            if (lef_file.empty()) continue;
-            cout << "Reading LEF: " << lef_file << endl;
-            ldp.read_lef(lef_file);
-        }
+    istringstream iss(filename_lef_list);
+    string lef_file;
+    while (getline(iss, lef_file, ',')) {
+        if (lef_file.empty()) continue;
+        cout << "Reading LEF: " << lef_file << endl;
+        ldp.read_lef(lef_file);
     }
 
     // 6. 讀取 DEF，並印 summary
@@ -68,6 +67,15 @@ int main (int argc, char* argv[])
 
     // 7. 輸出 bookshelf 格式
     // ldp.write_bookshelf(filename_bookshelf);
+
+    auto rows = extractRowInfos();
+    std::cout << "Total physical rows: " << rows.size() << "\n";
+    for (auto const& r : rows) {
+        std::cout << "Row@Y=" << r.y
+                << " origX=" << r.orig_x
+                << " count=" << r.num_sites
+                << " pitch=" << r.site_step << "\n";
+    }
 
     cout << endl << "Done." << endl;
     return 0;
