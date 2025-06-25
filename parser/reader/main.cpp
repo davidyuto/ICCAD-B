@@ -1,108 +1,112 @@
 /**
  * @file    main.cpp
- * @author  Jinwook Jung (jinwookjung@kaist.ac.kr)
+ * @author  Jinwook Jung
  * @date    2017-12-23 22:12:10
  *
- * Modified: Removed Bookshelf output for CAD contest.
+ * Modified: Support multiple LEF (--lef) and single DEF (--def) arguments.
  */
 
 #include "Logger.h"
 #include "Watch.h"
 #include "ArgParser.h"
 #include "LefDefParser.h"
-// #include "PlaceStructure.h"
 #include "PlacementStructure.h"
 
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
+#include <algorithm>
 
 using namespace std;
 
-void show_usage();
-void show_banner();
-void show_cmd_args();
-
-#ifndef UNIT_TEST
-
-int main(int argc, char* argv[])
+void show_usage()
 {
-    util::Watch watch;
+    cout << "\nUsage:\n"
+         << "  LefDefParser --lef <lef1[,lef2,...]> --def <def>\n\n";
+}
 
-    // 1. Parse command line
+int main(int argc, char** argv) {
     auto& ap = ArgParser::get();
     ap.initialize(argc, argv);
 
-    // LEF list (comma-separated) and DEF file
-    auto filename_lef_list = ap.get_argument("--lef");
-    auto filename_def      = ap.get_argument("--def");
 
-    // 2. Check arguments
-    if (filename_lef_list.empty() || filename_def.empty()) {
-        show_usage();
-        return -1;
+    string lef_arg = ap.get_argument("--lef");
+    string def_file = ap.get_argument("--def");
+    if (lef_arg.empty() || def_file.empty()) {
+        cerr << "Usage: " << argv[0]
+             << " --lef <lef1[,lef2,...]> --def <def>\n";
+        return 1;
     }
 
-    // 3. Show info
-    show_banner();
-    show_cmd_args();
-
-    // 4. Get parser instance
-    auto& ldp = my_lefdef::LefDefParser::get_instance();
-
-    // 5. Read all LEF files
+    vector<string> lef_files;
     {
-        istringstream iss(filename_lef_list);
-        string lef_file;
-        while (getline(iss, lef_file, ',')) {
-            if (lef_file.empty()) continue;
-            cout << "Reading LEF: " << lef_file << endl;
-            ldp.read_lef(lef_file);
+        stringstream ss(lef_arg);
+        string token;
+        while (getline(ss, token, ',')) {
+            if (!token.empty()) lef_files.push_back(token);
         }
     }
 
-    // 6. Read DEF file
-    ldp.read_def(filename_def);
+    auto& ldp = my_lefdef::LefDefParser::get_instance();
+    for (auto const& lf : lef_files) {
+        cout << "Reading LEF file: " << lf << "\n";
+        ldp.read_lef(lf);
+    }
 
-    cout << endl << "Parsing complete." << endl;
+
+    cout << "Reading DEF file: " << def_file << "\n";
+    ldp.read_def(def_file);
+
+
+
+    cout << "\nParsing complete.\n";
+
     auto rows = extractRowInfos();
-    std::cout << "Total physical rows: " << rows.size() << "\n";
-    for (int i = 0; i < std::min<size_t>(rows.size(), 10); ++i) {
-    auto &r = rows[i];
-    std::cout << "Row@Y=" << r.y
-            << " origX=" << r.orig_x
-            << " count=" << r.num_sites
-            << " pitch=" << r.site_step << "\n";
-}
+    cout << "Total physical rows: " << rows.size() << "\n";
+    for (size_t i = 0; i < min(rows.size(), size_t(10)); ++i) {
+        auto &r = rows[i];
+        cout << "Row@Y="    << r.y
+             << " origX="   << r.orig_x
+             << " count="   << r.num_sites
+             << " pitch="   << r.site_step
+             << "\n";
+    }
+
+    // 打印单比特 FF 列表
+    const auto& ffs = ldp.getFFs();
+    const auto& mbffs = ldp.getMBFFs();
+    const auto& comps = ldp.get_def().get_component_umap();
+
+    cout << "\nSummary of FF classification:\n";
+    cout << "  Single-bit FF count : " << ffs.size() << "\n";
+    cout << "  Multi-bit FF groups : " << mbffs.size() << "\n";
+
+    // 印出前 10 個 FF
+    cout << "\n[Sample] First up to 10 FFs:\n";
+    for (size_t i = 0; i < std::min<size_t>(ffs.size(), 10); ++i) {
+        const auto& ff = ffs[i];
+        auto it = comps.find(ff.name);
+        std::string macro = (it != comps.end() && it->second->lef_macro_) 
+            ? it->second->lef_macro_->name_ : "UNKNOWN";
+        cout << "  " << ff.name << " @ (" << ff.x << "," << ff.y << ")"
+            << "   [Macro: " << macro << "]\n";
+    }
+
+    cout << "\n[Sample] First up to 10 MBFF bits:\n";
+    size_t count = 0;
+    for (const auto& mb : mbffs) {
+        for (const auto& bit : mb.bits) {
+            if (count++ >= 10) break;
+            auto it = comps.find(bit.name);
+            std::string macro = (it != comps.end() && it->second->lef_macro_) 
+                ? it->second->lef_macro_->name_ : "UNKNOWN";
+            cout << "  " << bit.name << " @ (" << bit.x << "," << bit.y << ")"
+                << "   [Group: " << mb.group << ", Macro: " << macro << "]\n";
+        }
+        if (count >= 10) break;
+    }
+
 
     return 0;
 }
-
-void show_usage()
-{
-    cout << endl;
-    cout << "Usage:" << endl;
-    cout << "  LefDefParser --lef <lef1[,lef2,...]> --def <def>" << endl << endl;
-}
-
-void show_banner()
-{
-    cout << string(79, '=') << endl;
-    cout << "LEF/DEF Parser" << endl;
-    cout << string(79, '=') << endl;
-}
-
-void show_cmd_args()
-{
-    auto& ap = ArgParser::get();
-    cout << "  LEF file(s): " << ap.get_argument("--lef") << endl;
-    cout << "  DEF file   : " << ap.get_argument("--def") << endl;
-}
-
-#else
-
-#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE Simple testcases
-#include <boost/test/unit_test.hpp>
-
-#endif
