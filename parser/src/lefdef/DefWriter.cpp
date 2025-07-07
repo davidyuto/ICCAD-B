@@ -75,7 +75,7 @@ static void write_gcell_grids (def::Def* def)
         auto status = defwGcellGrid(dir_str.c_str(), g->location_, g->num_, g->step_);
         CHECK_STATUS(status);
     }
-
+    
     auto status = defwNewLine();
     CHECK_STATUS(status);
 }
