@@ -32,7 +32,6 @@
 #include <deque>
 #include <list>
 #include <map>
-#include <set>
 #include <queue>
 #include <stack>
 #include <unordered_map>
@@ -76,7 +75,6 @@ using std::vector;
 using std::deque;
 using std::list;
 using std::map;
-using std::set;
 using std::queue;
 using std::stack;
 using std::unordered_map;

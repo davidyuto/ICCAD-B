@@ -9,6 +9,7 @@
 #include <vector>
 #include <unordered_map>
 
+
 namespace my_lefdef
 {
 
@@ -16,7 +17,97 @@ struct FlipFlop {
     std::string name;
     int x, y;
     std::string macro;
-    double width, height; // 👈 新增 FF 的 size（來自 macro SIZE）
+    double width, height;
+
+    std::string clk_net;     
+    std::string fanin_net;   
+    std::string fanout_net;  
+ 
+    int new_x, new_y; 
+    int ffIdx = -1;
+    int clusterIdx = -1;
+
+    std::vector<std::pair<int, double>> neighbors;
+
+    double bandwidth = 0.0;
+    bool isShifting = true;
+    int clkIdx = -1;
+    bool isLegalize = false;
+
+    // double originalQpinDelay = 0.0;
+    // void* physicalFF = nullptr;
+    // int slot = 0;
+    // bool fixed = true;
+    void setNewCoor(int nx, int ny) {
+        new_x = nx;
+        new_y = ny;
+    }
+
+    void resetShift() {
+        new_x = x;
+        new_y = y;
+    }
+
+    void addNeighbor(int idx, double dist) {
+        neighbors.push_back({idx, dist});
+    }
+
+    void sortNeighbors() {
+        std::sort(neighbors.begin(), neighbors.end(),
+                  [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
+                      return a.second < b.second;
+                  });
+    }
+    void setBandwidth() {
+        if (neighbors.size() > 15) {
+            bandwidth = neighbors[15].second;
+        } else if (!neighbors.empty()) {
+            bandwidth = neighbors.back().second;
+        } else {
+            bandwidth = 0.0;
+        }
+
+        if (bandwidth > 4000000.0) {  // MAX_SQUARE_DISPLACEMENT = 2000^2
+            bandwidth = 1000.0;       // MAX_BANDWIDTH
+        } else {
+            bandwidth = std::sqrt(bandwidth);
+        }
+    }
+
+    double squareDistanceTo(int px, int py) const {
+        int dx = x - px;
+        int dy = y - py;
+        return static_cast<double>(dx * dx + dy * dy);
+    }
+
+    double squareDistanceToNew() const {
+        int dx = x - new_x;
+        int dy = y - new_y;
+        return static_cast<double>(dx * dx + dy * dy);
+    }
+
+    double shift(const std::vector<FlipFlop>& allFFs) {
+        double x_shift = 0.0, y_shift = 0.0, scale = 0.0;
+        for (const auto& [nid, dist] : neighbors) {
+            const auto& nbr = allFFs[nid];
+            double bw = nbr.bandwidth;
+            if (bw < 1e-6) continue;
+            double weight = std::exp(-dist / (2 * bw * bw)) / std::pow(bw, 4);
+            x_shift += nbr.x * weight;
+            y_shift += nbr.y * weight;
+            scale += weight;
+        }
+
+        if (scale < 1e-10) return 0.0;
+        x_shift /= scale;
+        y_shift /= scale;
+
+        double dx = x_shift - new_x;
+        double dy = y_shift - new_y;
+        setNewCoor(static_cast<int>(x_shift), static_cast<int>(y_shift));
+        return std::sqrt(dx * dx + dy * dy);
+    }
+
 };
 
 
@@ -24,6 +115,20 @@ struct FlipFlop {
 struct MBFF {
     std::string group;             // 以 component 名称去掉末尾“_bit”编号得到
     std::vector<FlipFlop> bits;    // 每一位的实例和坐标
+};
+
+struct NetConnection {
+    std::string instance;  // instance name or IO name
+    std::string pin;       // D / Q / CLK / A1 / etc
+};
+
+struct NetlistNet {
+    std::string name;
+    std::vector<NetConnection> connections;
+};
+
+struct InternalNetlist {
+    std::unordered_map<std::string, NetlistNet> nets;
 };
 
 class LefDefParser
@@ -46,15 +151,12 @@ public:
     const std::vector<MBFF>&    getMBFFs() const { return mbffs_; }
 
 
-    void write_bookshelf      (const std::string &filename) const;
-    void write_bookshelf_nodes(const std::string &filename) const;
-    void write_bookshelf_nets (const std::string &filename) const;
-    void write_bookshelf_wts  (const std::string &filename) const;
-    void write_bookshelf_scl  (const std::string &filename) const;
-    void write_bookshelf_pl   (const std::string &filename) const;
-    void update_def           (const std::string &bookshelf_pl);
+   
 
     def::Def& get_def();
+
+    InternalNetlist extractNetlist() const;
+    void fillFlipFlopNets();  
 
 private:
 
@@ -78,7 +180,6 @@ private:
     static bool        isSingleBitMacro (const lef::MacroPtr &m);
     static std::string extractGroupName (const std::string &compName);
 };
-
 } // namespace my_lefdef
 
 #endif /* LEFDEFPARSER_H */

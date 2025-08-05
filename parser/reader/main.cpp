@@ -10,14 +10,15 @@
 #include "Watch.h"
 #include "ArgParser.h"
 #include "LefDefParser.h"
+#include "MeanShift.h"
+#include "Cluster.h"
 #include "PlacementStructure.h"
-
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
 #include <algorithm>
-
+#define MAX_NEIGHBORS 5
 using namespace std;
 
 void show_usage()
@@ -57,6 +58,7 @@ int main(int argc, char** argv) {
 
     cout << "Reading DEF file: " << def_file << "\n";
     ldp.read_def(def_file);
+    ldp.fillFlipFlopNets();
 
 
 
@@ -97,19 +99,6 @@ int main(int argc, char** argv) {
             << "   [Macro: " << macro << "]\n";
     }
 
-    cout << "\n[Sample] First up to 10 MBFF bits:\n";
-    size_t count = 0;
-    for (const auto& mb : mbffs) {
-        for (const auto& bit : mb.bits) {
-            if (count++ >= 10) break;
-            auto it = comps.find(bit.name);
-            std::string macro = (it != comps.end() && it->second->lef_macro_) 
-                ? it->second->lef_macro_->name_ : "UNKNOWN";
-            cout << "  " << bit.name << " @ (" << bit.x << "," << bit.y << ")"
-                << "   [Group: " << mb.group << ", Macro: " << macro << "]\n";
-        }
-        if (count >= 10) break;
-    }
 
     std::cout << "\n[Check] First 5 FFs with Size:\n";
     for (int i = 0; i < std::min((int)ffs.size(), 5); ++i) {
@@ -118,6 +107,144 @@ int main(int argc, char** argv) {
                 << " @ (" << ff.x << ", " << ff.y << ")"
                 << " | Macro: " << ff.macro
                 << " | Size: " << ff.width << " x " << ff.height << "\n";
+    }
+
+    //     =======================================
+    // 印出前 10 條 Net 及其詳細 Connection 資訊（含 bbox / pin / instance）
+    // // =======================================
+    // const auto& nets = ldp.get_def().get_net_umap();
+
+    // std::cout << "\n========== Sample DEF Netlist (up to 10) ==========\n";
+    // int net_count = 0;
+    // for (const auto& [net_name, net_ptr] : nets) {
+    //     std::cout << net_name << "[" << net_ptr->connections_.size() << "]\n";
+    //     for (const auto& conn : net_ptr->connections_) {
+    //         std::cout << "  " << *conn << "\n";  // 使用你原本的 operator<< (Connection)
+    //     }
+    //     if (++net_count >= 10) break;
+    // }
+
+    // auto netlist = ldp.extractNetlist();
+
+    // std::cout << "\n[Check] Sample InternalNetlist (up to 5 nets):\n";
+    // int shown = 0;
+    // for (const auto& [net_name, net] : netlist.nets) {
+    //     std::cout << "Net: " << net_name << "\n";
+    //     for (const auto& conn : net.connections) {
+    //         std::cout << "  Instance: " << conn.instance
+    //                 << ", Pin: " << conn.pin << "\n";
+    //     }
+    //     if (++shown >= 5) break;
+    // }
+    std::cout << "\n[Check] First 3 FFs with Net Connections:\n";
+    for (int i = 0; i < std::min(3, (int)ldp.getFFs().size()); ++i) {
+        const auto& ff = ldp.getFFs()[i];
+        std::cout << "  " << ff.name 
+              << " | D: "   << (ff.fanin_net.empty() ? "None" : ff.fanin_net)
+              << ", Q: "    << (ff.fanout_net.empty() ? "None" : ff.fanout_net)
+              << ", CLK: "  << (ff.clk_net.empty() ? "None" : ff.clk_net)
+              << "\n";
+    }
+
+        // =============================
+    // R-tree + KNN 測試（前3個FF印出最近的鄰居）
+    // =============================
+    std::vector<my_lefdef::FlipFlop> ff_copy = ffs;
+    my_lefdef::FlipFlopClustering clustering(ff_copy);
+
+    // ==== Step 1: 簡單統計 FF 平均密度 ====
+    double estimate_radius = 100.0;  // 預設探查半徑
+    int sample_count = 100;          // 只隨機抽樣 100 個 FF 來估算密度
+    int total_neighbors = 0;
+
+    clustering.buildRTree();  // 確保 R-tree 建好
+
+    for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
+        const auto& ff = ff_copy[i];
+        int count = clustering.countNeighborsWithinRadius(ff.x, ff.y, estimate_radius);
+        total_neighbors += count;
+    }
+
+    double avg_density = (double)total_neighbors / sample_count;
+
+    // ==== Step 2: 根據密度估算參數 ====
+    int adaptive_K = std::clamp((int)(avg_density * 0.5), 5, 30);  // 建議值介於 5~30 之間
+    double adaptive_radius = estimate_radius * 1.5;  // 可放大些，避免漏掉稀疏區
+    double max_square_displacement = adaptive_radius * adaptive_radius;
+
+    std::cout << "\n[Auto-Tune] Estimated avg_density = " << avg_density
+            << ", adaptive_K = " << adaptive_K
+            << ", radius = " << adaptive_radius << "\n";
+
+    // ==== Step 3: 初始化 KNN ====
+    clustering.initKNN(adaptive_K, 4000000);
+
+    // 印出前 3 個 FF 及其最近鄰
+    std::cout << "\n[Check] R-tree KNN Results for first 3 FFs:\n";
+    for (int i = 0; i < std::min(20, (int)ff_copy.size()); ++i) {
+        const auto& ff = ff_copy[i];
+        std::cout << "  [FF] " << ff.name << " @ (" << ff.x << ", " << ff.y << ") has neighbors:\n";
+        if (ff.neighbors.empty()) {
+            std::cout << "    No neighbors found.\n";
+            continue;
+        }
+        for (const auto& [nid, dist2] : ff.neighbors) {
+            const auto& neighbor = ff_copy[nid];
+            std::cout << "    -> " << neighbor.name 
+                    << " @ (" << neighbor.x << ", " << neighbor.y << ")"
+                    << " | distance = " << std::sqrt(dist2) << "\n";
+        }
+        std::cout << "  Bandwidth (h_i) = " << ff.bandwidth << "\n";
+    }
+
+    clustering.shiftAllFlipFlops(); 
+
+    for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
+        const auto& ff = ff_copy[i];
+        std::cout << "FF[" << i << "]: "
+                << "Old = (" << ff.x << ", " << ff.y << "), "
+                << "New = (" << ff.new_x << ", " << ff.new_y << ")"
+                << std::endl;
+    }
+
+    clustering.buildClusters();
+    const auto& clusters = clustering.getClusters();
+
+    std::cout << "\n========== MeanShift Clustering Result ==========\n";
+    if (clusters.empty()) {
+        std::cout << "No clusters found.\n";
+        return 0;
+    }
+    int count_1 = 0;
+    int count_2 = 0;
+    int count_3 = 0;
+    int count_4 = 0;
+    int count_5 = 0;
+    int count_more = 0;
+    for (const auto& cl : clusters) {
+        size_t size = cl.getFFs().size();
+        if (size == 1) ++count_1;
+        else if (size == 2) ++count_2;
+        else if (size == 3) ++count_3;
+        else if (size == 4) ++count_4;
+        else if (size == 5) ++count_5;
+        else if (size > 5) ++count_more;
+    }
+
+    std::cout << "\n========== Cluster Size Distribution ==========\n";
+    std::cout << "Clusters with 1 FF  : " << count_1 << "\n";
+    std::cout << "Clusters with 2 FFs : " << count_2 << "\n";
+    std::cout << "Clusters with 3 FFs : " << count_3 << "\n";
+    std::cout << "Clusters with >3 FFs: " << count_more << "\n";
+    std::cout << "Total Clusters: " << clusters.size() << "\n";
+    for (size_t i = 0; i < std::min<size_t>(clusters.size(), 5); ++i) {
+        const auto& cl = clusters[i];
+        std::cout << "Cluster ID " << cl.getID()
+                << ": " << cl.getFFs().size()
+                << " FFs, Center = (" << cl.getCenterX() << "," << cl.getCenterY() << ")\n";
+        for (const auto* ff : cl.getFFs()) {
+            std::cout << "  -> " << ff->name << " @ (" << ff->x << ", " << ff->y << ")\n";
+        }
     }
     return 0;
 }

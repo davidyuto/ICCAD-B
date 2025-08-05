@@ -24,8 +24,8 @@ void extend_vector (vector<T>& dest, vector<T>& src)
 template <typename T>
 void delete_elements (vector<T>& a, vector<T>& b) 
 {
-    set<T> result;
-    set_difference(a.begin(), a.end(), b.begin(), b.end(), 
+    std::set<T> result;
+    std::set_difference(a.begin(), a.end(), b.begin(), b.end(), 
                    inserter(result, result.end()));
 
     a.clear();
