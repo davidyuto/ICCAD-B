@@ -34,10 +34,6 @@ struct FlipFlop {
     int clkIdx = -1;
     bool isLegalize = false;
 
-    // double originalQpinDelay = 0.0;
-    // void* physicalFF = nullptr;
-    // int slot = 0;
-    // bool fixed = true;
     void setNewCoor(int nx, int ny) {
         new_x = nx;
         new_y = ny;
@@ -58,21 +54,34 @@ struct FlipFlop {
                       return a.second < b.second;
                   });
     }
-    void setBandwidth() {
-        if (neighbors.size() > 15) {
-            bandwidth = neighbors[15].second;
-        } else if (!neighbors.empty()) {
-            bandwidth = neighbors.back().second;
-        } else {
+    void setBandwidth(double alpha = 1.5, double h_max = 1500.0) {
+        if (neighbors.empty()) {
             bandwidth = 0.0;
+            return;
         }
 
-        if (bandwidth > 4000000.0) {  // MAX_SQUARE_DISPLACEMENT = 2000^2
-            bandwidth = 1000.0;       // MAX_BANDWIDTH
-        } else {
-            bandwidth = std::sqrt(bandwidth);
-        }
+        int M = std::min(14, static_cast<int>(neighbors.size() - 1));  // M-th neighbor (15th)
+        double dist2 = neighbors[M].second;
+        double dist = std::sqrt(dist2);
+
+        double bw = std::min(h_max, alpha * dist);
+        if (bw < 300.0) bw = 300.0;
+
+        bandwidth = bw;
+        
     }
+// void setBandwidth(double dist_to_Mth, double criticality = 0.0, double h_max = 1500.0) {
+//     criticality = std::max(0.0, std::min(1.0, criticality));  // 限制在 [0, 1]
+//     double alpha = 1.5 * (1.0 - 0.8 * criticality);            // 保證 α ≥ 0.3
+//     double raw_bw = alpha * dist_to_Mth;
+//     double bw = std::min(h_max, raw_bw);
+//     // if (bw < 300.0) bw = 300.0;
+//     bandwidth = bw;
+
+//     std::cout << "[BW] " << name << ": bw = " << bandwidth << "\n";
+// }
+
+
 
     double squareDistanceTo(int px, int py) const {
         int dx = x - px;
@@ -134,19 +143,15 @@ struct InternalNetlist {
 class LefDefParser
 {
 public:
-    // 单例访问
     static LefDefParser& get_instance();
 
-    // 读取 LEF → 调用 Lef::read_lef / report
     void read_lef(const std::string &filename);
 
-    // 读取 DEF → 调用 Def::read_def / report 并自动 extractFlipFlops
     void read_def(const std::string &filename);
 
-    // 从 DEF 解析后的组件里，提取所有单比特 FF 与多比特 FF 群组
+
     void extractFlipFlops();
 
-    // 访问结果
     const std::vector<FlipFlop>& getFFs() const { return ffs_; }
     const std::vector<MBFF>&    getMBFFs() const { return mbffs_; }
 

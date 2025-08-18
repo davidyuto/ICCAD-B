@@ -20,8 +20,8 @@ public:
     void buildRTree();
     void initKNN(int max_neighbors, double max_square_displacement);
     void shiftAllFlipFlops(int max_iterations = 50, double shift_tolerance = 0.1);
-    void buildClusters();
-    std::vector<Cluster>& getClusters();
+    // void buildClusters();
+    // std::vector<Cluster>& getClusters();
     int countNeighborsWithinRadius(double x, double y, double radius) const {
         namespace bg = boost::geometry;
         namespace bgi = boost::geometry::index;
@@ -45,7 +45,7 @@ public:
 private:
     std::vector<FlipFlop>& ffs_;
     RTree rtree_;
-    std::vector<Cluster> clusters_;
+    // std::vector<Cluster> clusters_;
     double gaussianKernel(int x1, int y1, int x2, int y2, double bandwidth) const;
     double squareDistance(int x1, int y1, int x2, int y2) const;
 };

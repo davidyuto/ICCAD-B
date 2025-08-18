@@ -12,7 +12,9 @@
 #include "LefDefParser.h"
 #include "MeanShift.h"
 #include "Cluster.h"
+#include "Banking.h"
 #include "PlacementStructure.h"
+#include "CompatParser.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -146,18 +148,16 @@ int main(int argc, char** argv) {
               << "\n";
     }
 
-        // =============================
-    // R-tree + KNN 測試（前3個FF印出最近的鄰居）
-    // =============================
+
     std::vector<my_lefdef::FlipFlop> ff_copy = ffs;
     my_lefdef::FlipFlopClustering clustering(ff_copy);
 
     // ==== Step 1: 簡單統計 FF 平均密度 ====
-    double estimate_radius = 100.0;  // 預設探查半徑
-    int sample_count = 100;          // 只隨機抽樣 100 個 FF 來估算密度
+    double estimate_radius = 4000.0;  
+    int sample_count = 100;        
     int total_neighbors = 0;
 
-    clustering.buildRTree();  // 確保 R-tree 建好
+    clustering.buildRTree();  
 
     for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
         const auto& ff = ff_copy[i];
@@ -166,20 +166,15 @@ int main(int argc, char** argv) {
     }
 
     double avg_density = (double)total_neighbors / sample_count;
-
-    // ==== Step 2: 根據密度估算參數 ====
-    int adaptive_K = std::clamp((int)(avg_density * 0.5), 5, 30);  // 建議值介於 5~30 之間
-    double adaptive_radius = estimate_radius * 1.5;  // 可放大些，避免漏掉稀疏區
+    int adaptive_K = std::clamp((int)(avg_density * 0.5), 5, 30);  
+    double adaptive_radius = estimate_radius * 1.5;  
     double max_square_displacement = adaptive_radius * adaptive_radius;
 
-    std::cout << "\n[Auto-Tune] Estimated avg_density = " << avg_density
-            << ", adaptive_K = " << adaptive_K
-            << ", radius = " << adaptive_radius << "\n";
 
-    // ==== Step 3: 初始化 KNN ====
-    clustering.initKNN(adaptive_K, 4000000);
 
-    // 印出前 3 個 FF 及其最近鄰
+    clustering.initKNN(40, 4000000);
+
+
     std::cout << "\n[Check] R-tree KNN Results for first 3 FFs:\n";
     for (int i = 0; i < std::min(20, (int)ff_copy.size()); ++i) {
         const auto& ff = ff_copy[i];
@@ -199,52 +194,67 @@ int main(int argc, char** argv) {
 
     clustering.shiftAllFlipFlops(); 
 
-    for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
-        const auto& ff = ff_copy[i];
-        std::cout << "FF[" << i << "]: "
-                << "Old = (" << ff.x << ", " << ff.y << "), "
-                << "New = (" << ff.new_x << ", " << ff.new_y << ")"
-                << std::endl;
-    }
+    // for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
+    //     const auto& ff = ff_copy[i];
+    //     std::cout << "FF[" << i << "]: "
+    //             << "Old = (" << ff.x << ", " << ff.y << "), "
+    //             << "New = (" << ff.new_x << ", " << ff.new_y << ")"
+    //             << std::endl;
+    // }
+    std::cout << "\n========== Banking ==========\n";
+    my_lefdef::Banking banker(ff_copy);
+    banker.run(); 
 
-    clustering.buildClusters();
-    const auto& clusters = clustering.getClusters();
+    const auto& clusters = banker.getClusters();
+    // for (const auto& cluster : clusters) {
+    //     std::cout << "Cluster #" << cluster.getID()
+    //               << " with " << cluster.getFFs().size() << " FFs at center ("
+    //               << cluster.getCenterX() << ", " << cluster.getCenterY() << ")\n";
+    //     for (const auto* ff : cluster.getFFs()) {
+    //         std::cout << "   - " << ff->name << " (" << ff->x << ", " << ff->y << ")\n";
+    //     }
+    // }   
 
-    std::cout << "\n========== MeanShift Clustering Result ==========\n";
-    if (clusters.empty()) {
-        std::cout << "No clusters found.\n";
-        return 0;
-    }
-    int count_1 = 0;
-    int count_2 = 0;
-    int count_3 = 0;
-    int count_4 = 0;
-    int count_5 = 0;
-    int count_more = 0;
-    for (const auto& cl : clusters) {
-        size_t size = cl.getFFs().size();
-        if (size == 1) ++count_1;
-        else if (size == 2) ++count_2;
-        else if (size == 3) ++count_3;
-        else if (size == 4) ++count_4;
-        else if (size == 5) ++count_5;
-        else if (size > 5) ++count_more;
+    std::map<size_t, int> cluster_size_count;
+    for (const auto& cluster : clusters) {
+        cluster_size_count[cluster.getFFs().size()]++;
     }
 
     std::cout << "\n========== Cluster Size Distribution ==========\n";
-    std::cout << "Clusters with 1 FF  : " << count_1 << "\n";
-    std::cout << "Clusters with 2 FFs : " << count_2 << "\n";
-    std::cout << "Clusters with 3 FFs : " << count_3 << "\n";
-    std::cout << "Clusters with >3 FFs: " << count_more << "\n";
-    std::cout << "Total Clusters: " << clusters.size() << "\n";
-    for (size_t i = 0; i < std::min<size_t>(clusters.size(), 5); ++i) {
-        const auto& cl = clusters[i];
-        std::cout << "Cluster ID " << cl.getID()
-                << ": " << cl.getFFs().size()
-                << " FFs, Center = (" << cl.getCenterX() << "," << cl.getCenterY() << ")\n";
-        for (const auto* ff : cl.getFFs()) {
-            std::cout << "  -> " << ff->name << " @ (" << ff->x << ", " << ff->y << ")\n";
-        }
+    for (const auto& [size, count] : cluster_size_count) {
+        std::cout << "Clusters with " << size << " FF"
+                << (size > 1 ? "s" : "") << " : " << count << "\n";
     }
-    return 0;
+
+    // std::cout << "\n[Auto-Tune] Estimated avg_density = " << avg_density
+    //         << ", adaptive_K = " << adaptive_K
+    //         << ", radius = " << adaptive_radius << "\n";
+    CompatMaps maps;
+    // 將兩份檔案都讀進來（順序不限）
+    bool ok1 = CompatParser::load("../testcase/banking_compatible.rpt.txt", maps);
+    bool ok2 = CompatParser::load("../testcase/debanking_compatible.rpt.txt", maps);
+    std::cout << "[banking open] " << ok1
+            << "  [debanking open] " << ok2 << "\n";
+    std::cout << "single2multi size=" << maps.single2multi.size()
+            << "  multi2single size=" << maps.multi2single.size() << "\n";
+
+    // 查 banking: 單 bit → 多 bit 候選
+    auto &cands = CompatParser::single_to_multi(maps, "SNPSHOPT25_FSDN_V2_1");
+    std::cout << "Single SNPSHOPT25_FSDN_V2_1 compatible MBFF:\n";
+    for (auto &s : cands) std::cout << "  - " << s << "\n";
+
+    // 查 debanking: 多 bit → 單 bit 候選
+    auto &cands2 = CompatParser::multi_to_single(maps, "SNPSHOPT25_FSDN4_V2_1");
+    std::cout << "Multi SNPSHOPT25_FSDN4_V2_1 compatible single-bit:\n";
+    for (auto &s : cands2) std::cout << "  - " << s << "\n";
+    std::cout << "\n[Check] First 3 FFs with Net Connections:\n";
+    for (int i = 0; i < std::min(3, (int)ldp.getFFs().size()); ++i) {
+        const auto& ff = ldp.getFFs()[i];
+        std::cout << "  " << ff.name 
+              << " | D: "   << (ff.fanin_net.empty() ? "None" : ff.fanin_net)
+              << ", Q: "    << (ff.fanout_net.empty() ? "None" : ff.fanout_net)
+              << ", CLK: "  << (ff.clk_net.empty() ? "None" : ff.clk_net)
+              << "\n";
+    }
+
 }

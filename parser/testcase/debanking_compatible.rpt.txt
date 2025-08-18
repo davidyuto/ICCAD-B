@@ -1,0 +1,335 @@
+----------------------------------------------------------------------------------------------------------------------
+Multi bit Lib cell                Compatibility       Single bit Lib cell                                    Details
+----------------------------------------------------------------------------------------------------------------------
+SNPSHOPT25_FSDN4_V2_0P5           COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSLOPT25_FSDN4_V2_0P5           COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSROPT25_FSDN4_V2_0P5           COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSSLOPT25_FSDN4_V2_0P5          COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSHOPT25_FSDN4_V2_1             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSLOPT25_FSDN4_V2_1             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSROPT25_FSDN4_V2_1             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSSLOPT25_FSDN4_V2_1            COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSHOPT25_FSDN4_V2_2             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSLOPT25_FSDN4_V2_2             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSROPT25_FSDN4_V2_2             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSSLOPT25_FSDN4_V2_2            COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSHOPT25_LSRDPQ4_1              COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSLOPT25_LSRDPQ4_1              COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSROPT25_LSRDPQ4_1              COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSSLOPT25_LSRDPQ4_1             COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSHOPT25_LSRDPQ4_2              COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSLOPT25_LSRDPQ4_2              COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSROPT25_LSRDPQ4_2              COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSSLOPT25_LSRDPQ4_2             COMPATIBLE          SNPSHOPT25_LSRDPQ_1
+                                                      SNPSHOPT25_LSRDPQ_2
+                                                      SNPSLOPT25_LSRDPQ_1
+                                                      SNPSLOPT25_LSRDPQ_2
+                                                      SNPSROPT25_LSRDPQ_1
+                                                      SNPSROPT25_LSRDPQ_2
+                                                      SNPSSLOPT25_LSRDPQ_1
+                                                      SNPSSLOPT25_LSRDPQ_2
+
+SNPSHOPT25_FSDN2_V2_0P5           COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSLOPT25_FSDN2_V2_0P5           COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSROPT25_FSDN2_V2_0P5           COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSSLOPT25_FSDN2_V2_0P5          COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSHOPT25_FSDN2_V2_1             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSLOPT25_FSDN2_V2_1             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSROPT25_FSDN2_V2_1             COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+
+SNPSSLOPT25_FSDN2_V2_1            COMPATIBLE          SNPSHOPT25_FSDN_V2_1
+                                                      SNPSHOPT25_FSDN_V2_2
+                                                      SNPSHOPT25_FSDN_V2_4
+                                                      SNPSLOPT25_FSDN_V2_1
+                                                      SNPSLOPT25_FSDN_V2_2
+                                                      SNPSLOPT25_FSDN_V2_4
+                                                      SNPSROPT25_FSDN_V2_1
+                                                      SNPSROPT25_FSDN_V2_2
+                                                      SNPSROPT25_FSDN_V2_4
+                                                      SNPSSLOPT25_FSDN_V2_1
+                                                      SNPSSLOPT25_FSDN_V2_2
+                                                      SNPSSLOPT25_FSDN_V2_4
+

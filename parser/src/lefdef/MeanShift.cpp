@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <cmath>
-#include "Cluster.h"
+
 namespace my_lefdef {
 
 FlipFlopClustering::FlipFlopClustering(std::vector<FlipFlop>& ffs) : ffs_(ffs) {}
@@ -18,6 +18,10 @@ void FlipFlopClustering::buildRTree() {
 }
 
 void FlipFlopClustering::initKNN(int max_neighbors, double max_square_displacement) {
+    constexpr int M = 14;          
+    constexpr double alpha_base = 1.5;
+    constexpr double h_max = 1500.0;
+
     #pragma omp parallel for
     for (int i = 0; i < static_cast<int>(ffs_.size()); ++i) {
         FlipFlop& ff = ffs_[i];
@@ -26,7 +30,8 @@ void FlipFlopClustering::initKNN(int max_neighbors, double max_square_displaceme
         ff.neighbors.clear();
 
         std::vector<PointWithID> results;
-        rtree_.query(boost::geometry::index::nearest(BoostPoint(ff.x, ff.y), max_neighbors), std::back_inserter(results));
+        rtree_.query(boost::geometry::index::nearest(BoostPoint(ff.x, ff.y), max_neighbors),
+                     std::back_inserter(results));
 
         for (const auto& p : results) {
             int neighbor_idx = p.second;
@@ -34,7 +39,7 @@ void FlipFlopClustering::initKNN(int max_neighbors, double max_square_displaceme
 
             const FlipFlop& neighbor = ffs_[neighbor_idx];
             double dist2 = squareDistance(ff.x, ff.y, neighbor.x, neighbor.y);
-            if (dist2 < max_square_displacement) {
+            if (dist2 <= max_square_displacement) {
                 ff.neighbors.emplace_back(neighbor_idx, dist2);
             }
         }
@@ -43,51 +48,52 @@ void FlipFlopClustering::initKNN(int max_neighbors, double max_square_displaceme
             return a.second < b.second;
         });
 
-        ff.isShifting = ff.neighbors.size() > 1;
+        ff.isShifting = !ff.neighbors.empty();
 
         if (ff.isShifting) {
-            size_t sel = std::min(ff.neighbors.size() - 1, static_cast<size_t>(max_neighbors - 1));
-            ff.bandwidth = std::sqrt(ff.neighbors[sel].second);
+            double dist_to_Mth = 800.0;  // Default
+            if ((int)ff.neighbors.size() > M) {
+                dist_to_Mth = std::sqrt(ff.neighbors[M].second);
+            } else {
+                dist_to_Mth = std::sqrt(ff.neighbors.back().second);
+            }
+            ff.setBandwidth(dist_to_Mth, h_max);
+        } else {
+            ff.bandwidth = 300.0;  
         }
     }
 }
 
 void FlipFlopClustering::shiftAllFlipFlops(int max_iterations, double shift_tolerance) {
+    std::cout << "[Debug] Entering shiftAllFlipFlops()\n";
+    std::cout << "[Debug] shiftAllFlipFlops() — total FFs: " << ffs_.size() << "\n";
+    int shifting_count = 0;
+    for (const auto& ff : ffs_) {
+        if (ff.isShifting) shifting_count++;
+    }
+    std::cout << "[Debug] isShifting FFs = " << shifting_count << "\n";
+
     double max_movement = 0.0;
 
-    #pragma omp parallel for reduction(max:max_movement)
     for (int i = 0; i < static_cast<int>(ffs_.size()); ++i) {
         FlipFlop& ff = ffs_[i];
         if (!ff.isShifting) {
-            // std::cout << "[DEBUG] Skip FF " << ff.name 
-            //         << " (neighbors=" << ff.neighbors.size() << ")\n";
+            // std::cout << "[FF " << ff.name << "] is not shifting, skipping.\n";
             continue;
-        } else {
-            // std::cout << "[DEBUG] Shift FF " << ff.name 
-            //         << " start at (" << ff.new_x << ", " << ff.new_y << ")"
-            //         << " bandwidth=" << ff.bandwidth << "\n";
-        }
+        } 
 
         for (int iter = 0; iter < max_iterations; ++iter) {
-            //std::cout << "  [Iter " << iter << "] Before: (" << ff.new_x << ", " << ff.new_y << ")\n";
+            // std::cout << "[Shift] Iteration " << iter + 1 << " for FF " << ff.name << "\n";
             double x_shift = 0.0, y_shift = 0.0, scale = 0.0;
-
             for (const auto& [nid, dist] : ff.neighbors) {
                 const auto& nbr = ffs_[nid];
                 double bw = nbr.bandwidth;
-                if (bw < 1e-6) {
-                    // std::cout << "    Neighbor " << nbr.name << " bw too small: " << bw << "\n";
-                    continue;
-                }
+                if (bw < 1e-6) continue;
                 double weight = std::exp(-dist / (2 * bw * bw)) / std::pow(bw, 2);
-                // std::cout << "    Neighbor " << nbr.name << " dist=" << dist 
-                //         << " bw=" << bw << " weight=" << weight << "\n";
                 x_shift += nbr.x * weight;
                 y_shift += nbr.y * weight;
                 scale += weight;
             }
-
-            // std::cout << "  [Iter " << iter << "] After: (" << ff.new_x << ", " << ff.new_y << ")\n";
 
             if (scale < 1e-10) break;
 
@@ -101,7 +107,12 @@ void FlipFlopClustering::shiftAllFlipFlops(int max_iterations, double shift_tole
             ff.new_x = static_cast<int>(x_shift);
             ff.new_y = static_cast<int>(y_shift);
 
-            if (dist < shift_tolerance) break;
+            // std::cout << "[Shift] " << ff.name << ": move = " << dist 
+            //           << ", new = (" << ff.new_x << "," << ff.new_y << ")\n";
+            if (dist < shift_tolerance) {
+                // std::cout << "have reach its the shift tolerance, break.\n";
+                break;
+            }
 
             if (dist > max_movement) {
                 max_movement = dist;
@@ -109,21 +120,11 @@ void FlipFlopClustering::shiftAllFlipFlops(int max_iterations, double shift_tole
         }
 
         ff.setNewCoor(ff.new_x, ff.new_y);
-        ff.setBandwidth();
+        ff.setBandwidth(1.5, 1500.0);
         ff.isLegalize = true; 
+    }
 
-    }
-    std::unordered_map<std::pair<int, int>, int, boost::hash<std::pair<int, int>>> cluster_grid;
-    int cluster_id = 0;
-    for (auto& ff : ffs_) {
-        int gx = ff.new_x / 1000;  
-        int gy = ff.new_y / 1000;
-        std::pair<int, int> key = std::make_pair(gx, gy);
-        if (cluster_grid.count(key) == 0)
-            cluster_grid[key] = cluster_id++;
-        ff.clusterIdx = cluster_grid[key];
-    }
-    // std::cout << "[Clustering] Max FF movement: " << max_movement << "\n";
+    
 }
 
 
@@ -137,24 +138,6 @@ double FlipFlopClustering::squareDistance(int x1, int y1, int x2, int y2) const 
     double dx = static_cast<double>(x1 - x2);
     double dy = static_cast<double>(y1 - y2);
     return dx * dx + dy * dy;
-}
-
-void FlipFlopClustering::buildClusters() {
-    std::unordered_map<int, Cluster> cluster_map;
-    for (auto& ff : ffs_) {
-        if (ff.clusterIdx == -1) continue;
-        cluster_map[ff.clusterIdx].addFF(&ff);
-    }
-    clusters_.clear();
-    int cid = 0;
-    for (auto& [idx, cl] : cluster_map) {
-        cl.setID(cid++);   
-        cl.computeCenter();   
-        clusters_.push_back(std::move(cl));
-    }
-}
-std::vector<Cluster>& FlipFlopClustering::getClusters() {
-    return clusters_;
 }
 
 } // namespace my_lefdef
