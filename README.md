@@ -1,5 +1,7 @@
 # ICCAD-B
 
+---
+
 ## Execution Format
 
 ./cadb_1075_final \
@@ -12,6 +14,8 @@
     -v <verilogFile1> <verilogFile2> ... \
     -def <defFile1> <defFile2> ... \
     -out <outputName>
+
+---
 
 ## Example: testcase3
 
