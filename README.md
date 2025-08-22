@@ -4,6 +4,7 @@
 
 ## Execution Format
 
+```bash
 ./cadb_1075_final \
     -weight <weightFile> \
     -lib <libFile1> <libFile2> ... \
