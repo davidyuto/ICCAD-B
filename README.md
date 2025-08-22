@@ -15,10 +15,8 @@
     -v <verilogFile1> <verilogFile2> ... \
     -def <defFile1> <defFile2> ... \
     -out <outputName>
-
----
-
-## Example: testcase3
+```
+## Example : testcase3
 
 ```bash
 ./cadb_1075_final \
@@ -27,4 +25,5 @@
   -sdc testcase3/testcase3.sdc \
   -v testcase3/testcase3.v \
   -def testcase3/testcase3.def \
-  -out testcase3/output
+  -out testcase3/output  
+```
