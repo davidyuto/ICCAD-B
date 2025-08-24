@@ -139,20 +139,6 @@ double FlipFlopClustering::squareDistance(int x1, int y1, int x2, int y2) const 
     return dx * dx + dy * dy;
 }
 
-void FlipFlopClustering::buildClusters() {
-    std::unordered_map<int, Cluster> cluster_map;
-    for (auto& ff : ffs_) {
-        if (ff.clusterIdx == -1) continue;
-        cluster_map[ff.clusterIdx].addFF(&ff);
-    }
-    clusters_.clear();
-    int cid = 0;
-    for (auto& [idx, cl] : cluster_map) {
-        cl.setID(cid++);   
-        cl.computeCenter();   
-        clusters_.push_back(std::move(cl));
-    }
-}
 std::vector<Cluster>& FlipFlopClustering::getClusters() {
     return clusters_;
 }

@@ -4,15 +4,25 @@
 #include "LefDefParser.h"
 #include "MeanShift.h"
 #include "Cluster.h"
+#include "Banking.h"
 #include "PlacementStructure.h"
 #include "CompatParser.h"
+
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <algorithm>
+#include <cmath>
+#include <climits>
+
 #define MAX_NEIGHBORS 5
 using namespace std;
+
+static inline double clamp_double(double v, double lo, double hi) {
+    return std::max(lo, std::min(v, hi));
+}
 
 int main(int argc, char** argv) {
     auto& ap = ArgParser::get();
@@ -33,7 +43,6 @@ int main(int argc, char** argv) {
         cout << "Reading LEF file: " << lf << "\n";
         ldp.read_lef(lf);
     }
-
     for (const auto& def : def_files) {
         cout << "Reading DEF file: " << def << "\n";
         ldp.read_def(def);
@@ -42,163 +51,112 @@ int main(int argc, char** argv) {
     ldp.fillFlipFlopNets();
     cout << "\nParsing complete.\n";
 
-    auto rows = extractRowInfos();
-    // cout << "Total physical rows: " << rows.size() << "\n";
-    // for (size_t i = 0; i < min(rows.size(), size_t(10)); ++i) {
-    //     auto &r = rows[i];
-    //     cout << "Row@Y="    << r.y
-    //          << " origX="   << r.orig_x
-    //          << " count="   << r.num_sites
-    //          << " pitch="   << r.site_step
-    //          << "\n";
-    // }
-
-    
-    const auto& ffs = ldp.getFFs();
+    // ============ Summary ============
+    const auto& ffs   = ldp.getFFs();
     const auto& mbffs = ldp.getMBFFs();
     const auto& comps = ldp.get_def().get_component_umap();
+
     size_t mbff_bits_total = 0;
     for (const auto& mb : mbffs) mbff_bits_total += mb.bits.size();
 
     cout << "\n========== FF Classification Summary ==========\n";
-    cout << "\nSummary of FF classification:\n";
     cout << "  Single-bit FF count : " << ffs.size() << "\n";
     cout << "  Multi-bit FF groups : " << mbffs.size() << "\n";
-    cout << "Total MBFF instances    : " << mbff_bits_total << "\n";
+    cout << "  Total MBFF instances: " << mbff_bits_total << "\n";
     cout << "================================================\n";
-    // 印出前 10 個 FF
+
+    // 印前 10 顆 FF
     cout << "\n[Sample] First up to 10 FFs:\n";
     for (size_t i = 0; i < std::min<size_t>(ffs.size(), 10); ++i) {
         const auto& ff = ffs[i];
         auto it = comps.find(ff.name);
-        std::string macro = (it != comps.end() && it->second->lef_macro_) 
+        std::string macro = (it != comps.end() && it->second->lef_macro_)
             ? it->second->lef_macro_->name_ : "UNKNOWN";
         cout << "  " << ff.name << " @ (" << ff.x << "," << ff.y << ")"
-            << "   [Macro: " << macro << "]\n";
+             << "   [Macro: " << macro << "]\n";
     }
-
 
     std::cout << "\n[Check] First 5 FFs with Size:\n";
     for (int i = 0; i < std::min((int)ffs.size(), 5); ++i) {
         const auto& ff = ffs[i];
-        std::cout << "  " << ff.name 
-                << " @ (" << ff.x << ", " << ff.y << ")"
-                << " | Macro: " << ff.macro
-                << " | Size: " << ff.width << " x " << ff.height << "\n";
+        std::cout << "  " << ff.name
+                  << " @ (" << ff.x << ", " << ff.y << ")"
+                  << " | Macro: " << ff.macro
+                  << " | Size: " << ff.width << " x " << ff.height << "\n";
     }
 
-    //     =======================================
-    // 印出前 10 條 Net 及其詳細 Connection 資訊（含 bbox / pin / instance）
-    // // =======================================
-    // const auto& nets = ldp.get_def().get_net_umap();
-
-    // std::cout << "\n========== Sample DEF Netlist (up to 10) ==========\n";
-    // int net_count = 0;
-    // for (const auto& [net_name, net_ptr] : nets) {
-    //     std::cout << net_name << "[" << net_ptr->connections_.size() << "]\n";
-    //     for (const auto& conn : net_ptr->connections_) {
-    //         std::cout << "  " << *conn << "\n";  // 使用你原本的 operator<< (Connection)
-    //     }
-    //     if (++net_count >= 10) break;
-    // }
-
-    // auto netlist = ldp.extractNetlist();
-
-    // std::cout << "\n[Check] Sample InternalNetlist (up to 5 nets):\n";
-    // int shown = 0;
-    // for (const auto& [net_name, net] : netlist.nets) {
-    //     std::cout << "Net: " << net_name << "\n";
-    //     for (const auto& conn : net.connections) {
-    //         std::cout << "  Instance: " << conn.instance
-    //                 << ", Pin: " << conn.pin << "\n";
-    //     }
-    //     if (++shown >= 5) break;
-    // }
     std::cout << "\n[Check] First 3 FFs with Net Connections:\n";
-    for (int i = 0; i < std::min(3, (int)ldp.getFFs().size()); ++i) {
-        const auto& ff = ldp.getFFs()[i];
-        std::cout << "  " << ff.name 
-              << " | D: "   << (ff.fanin_net.empty() ? "None" : ff.fanin_net)
-              << ", Q: "    << (ff.fanout_net.empty() ? "None" : ff.fanout_net)
-              << ", CLK: "  << (ff.clk_net.empty() ? "None" : ff.clk_net)
-              << "\n";
+    for (int i = 0; i < std::min(3, (int)ffs.size()); ++i) {
+        const auto& ff = ffs[i];
+        std::cout << "  " << ff.name
+                  << " | D: "   << (ff.fanin_net.empty() ? "None" : ff.fanin_net)
+                  << ", Q: "    << (ff.fanout_net.empty() ? "None" : ff.fanout_net)
+                  << ", CLK: "  << (ff.clk_net.empty() ? "None" : ff.clk_net)
+                  << "\n";
     }
 
-
+    // ============ Clock domain 分群 + MeanShift ============
     std::vector<my_lefdef::FlipFlop> ff_copy = ffs;
-    my_lefdef::FlipFlopClustering clustering(ff_copy);
 
-    // ==== Step 1: 簡單統計 FF 平均密度 ====
-    double estimate_radius = 4000.0;  
-    int sample_count = 100;        
-    int total_neighbors = 0;
-
-    clustering.buildRTree();  
-
-    for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
-        const auto& ff = ff_copy[i];
-        int count = clustering.countNeighborsWithinRadius(ff.x, ff.y, estimate_radius);
-        total_neighbors += count;
+    std::unordered_map<std::string, std::vector<int>> domain2idx;
+    for (int i = 0; i < (int)ff_copy.size(); i++) {
+        std::string clk = ff_copy[i].clk_net.empty() ? "__NOCLK__" : ff_copy[i].clk_net;
+        domain2idx[clk].push_back(i);
     }
 
-    double avg_density = (double)total_neighbors / sample_count;
-    int adaptive_K = std::clamp((int)(avg_density * 0.5), 5, 30);  
-    double adaptive_radius = estimate_radius * 1.5;  
-    double max_square_displacement = adaptive_radius * adaptive_radius;
-
-
-
-    clustering.initKNN(40, 4000000);
-
-
-    std::cout << "\n[Check] R-tree KNN Results for first 3 FFs:\n";
-    for (int i = 0; i < std::min(20, (int)ff_copy.size()); ++i) {
-        const auto& ff = ff_copy[i];
-        std::cout << "  [FF] " << ff.name << " @ (" << ff.x << ", " << ff.y << ") has neighbors:\n";
-        if (ff.neighbors.empty()) {
-            std::cout << "    No neighbors found.\n";
-            continue;
-        }
-        for (const auto& [nid, dist2] : ff.neighbors) {
-            const auto& neighbor = ff_copy[nid];
-            std::cout << "    -> " << neighbor.name 
-                    << " @ (" << neighbor.x << ", " << neighbor.y << ")"
-                    << " | distance = " << std::sqrt(dist2) << "\n";
-        }
-        std::cout << "  Bandwidth (h_i) = " << ff.bandwidth << "\n";
+    cout << "\n========== Clock Domains ==========\n";
+    for (const auto& kv : domain2idx) {
+        cout << "  " << kv.first << " : " << kv.second.size() << " FFs\n";
     }
 
-    clustering.shiftAllFlipFlops(); 
+    for (const auto& kv : domain2idx) {
+        const std::string& clk = kv.first;
+        const auto& idxs = kv.second;
+        if (idxs.size() <= 1) continue;
 
-    // for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
-    //     const auto& ff = ff_copy[i];
-    //     std::cout << "FF[" << i << "]: "
-    //             << "Old = (" << ff.x << ", " << ff.y << "), "
-    //             << "New = (" << ff.new_x << ", " << ff.new_y << ")"
-    //             << std::endl;
-    // }
+        std::vector<my_lefdef::FlipFlop> dom;
+        for (int id : idxs) dom.push_back(ff_copy[id]);
 
-    // for (const auto& cluster : clusters) {
-    //     std::cout << "Cluster #" << cluster.getID()
-    //               << " with " << cluster.getFFs().size() << " FFs at center ("
-    //               << cluster.getCenterX() << ", " << cluster.getCenterY() << ")\n";
-    //     for (const auto* ff : cluster.getFFs()) {
-    //         std::cout << "   - " << ff->name << " (" << ff->x << ", " << ff->y << ")\n";
-    //     }
-    // }   
+        // 計算 domain 尺度 → 設更保守的位移上限
+        int minx = INT_MAX, miny = INT_MAX, maxx = INT_MIN, maxy = INT_MIN;
+        for (const auto& f : dom) {
+            minx = std::min(minx, f.x);  maxx = std::max(maxx, f.x);
+            miny = std::min(miny, f.y);  maxy = std::max(maxy, f.y);
+        }
+        const double w = double(maxx - minx), h = double(maxy - miny);
+        const double diag = std::hypot(w, h);
+        const double max_move = clamp_double(0.25 * diag, 800.0, 2000.0);
+        const double max_sq_disp = max_move * max_move;
 
+        int K = (int)std::min<size_t>(std::max<size_t>(16, dom.size()/50), 100);
+        if ((int)dom.size() <= K) K = std::max(2, (int)dom.size() - 1);
 
-    // std::cout << "\n[Auto-Tune] Estimated avg_density = " << avg_density
-    //         << ", adaptive_K = " << adaptive_K
-    //         << ", radius = " << adaptive_radius << "\n";
+        std::cout << "[MeanShift@" << clk << "] FFs=" << dom.size()
+                  << " max_move=" << max_move << " K=" << K << "\n";
+
+        my_lefdef::FlipFlopClustering cl(dom);
+        cl.buildRTree();
+        cl.initKNN(K, max_sq_disp);
+        cl.shiftAllFlipFlops();
+
+        for (size_t j = 0; j < dom.size(); j++) {
+            int g = idxs[j];
+            ff_copy[g].new_x     = dom[j].new_x;
+            ff_copy[g].new_y     = dom[j].new_y;
+            ff_copy[g].bandwidth = dom[j].bandwidth;
+            ff_copy[g].isShifting = dom[j].isShifting;
+            ff_copy[g].isLegalize = true;
+        }
+    }
+
+    // ============ Compatible File Parser ============
     CompatMaps maps;
-    // 將兩份檔案都讀進來（順序不限）
-    bool ok1 = CompatParser::load("../testcase/banking_compatible.rpt.txt", maps);
-    bool ok2 = CompatParser::load("../testcase/debanking_compatible.rpt.txt", maps);
+    bool ok1 = CompatParser::load("testcase3/banking_compatible.rpt.txt", maps);
+    bool ok2 = CompatParser::load("testcase3/debanking_compatible.rpt.txt", maps);
     std::cout << "[banking open] " << ok1
-            << "  [debanking open] " << ok2 << "\n";
+              << "  [debanking open] " << ok2 << "\n";
     std::cout << "single2multi size=" << maps.single2multi.size()
-            << "  multi2single size=" << maps.multi2single.size() << "\n";
+              << "  multi2single size=" << maps.multi2single.size() << "\n";
 
     // 查 banking: 單 bit → 多 bit 候選
     auto &cands = CompatParser::single_to_multi(maps, "SNPSHOPT25_FSDN_V2_1");
@@ -209,14 +167,10 @@ int main(int argc, char** argv) {
     auto &cands2 = CompatParser::multi_to_single(maps, "SNPSHOPT25_FSDN4_V2_1");
     std::cout << "Multi SNPSHOPT25_FSDN4_V2_1 compatible single-bit:\n";
     for (auto &s : cands2) std::cout << "  - " << s << "\n";
-    std::cout << "\n[Check] First 3 FFs with Net Connections:\n";
-    for (int i = 0; i < std::min(3, (int)ldp.getFFs().size()); ++i) {
-        const auto& ff = ldp.getFFs()[i];
-        std::cout << "  " << ff.name 
-              << " | D: "   << (ff.fanin_net.empty() ? "None" : ff.fanin_net)
-              << ", Q: "    << (ff.fanout_net.empty() ? "None" : ff.fanout_net)
-              << ", CLK: "  << (ff.clk_net.empty() ? "None" : ff.clk_net)
-              << "\n";
-    }
 
+    // ============ Banking with compatibility ============
+    my_lefdef::Banking banking(ff_copy);
+    banking.run_big(maps, /*tau_merge=*/1.0, /*max_pair_dist=*/2500.0, /*h_cap=*/2000.0);
+
+    return 0;
 }
