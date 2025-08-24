@@ -138,7 +138,7 @@ int main(int argc, char** argv) {
         cl.buildRTree();
         cl.initKNN(K, max_sq_disp);
         cl.shiftAllFlipFlops();
-
+// 寫回去ff_copy
         for (size_t j = 0; j < dom.size(); j++) {
             int g = idxs[j];
             ff_copy[g].new_x     = dom[j].new_x;
