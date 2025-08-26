@@ -2,147 +2,183 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
-#include <algorithm>
+#include <regex>
 #include <cctype>
+#include <algorithm>
 
-// 從 values("...") 裡面取最大值
-static double extractWorstValues(const std::string& line) {
-    auto start = line.find("\"");
-    auto end   = line.rfind("\"");
-    double worst = 0.0;
-
-    if (start != std::string::npos && end != std::string::npos && end > start) {
-        std::string nums = line.substr(start + 1, end - start - 1);
-        std::replace(nums.begin(), nums.end(), ',', ' ');
-        std::istringstream iss(nums);
-        double val;
-        while (iss >> val) {
-            worst = std::max(worst, val);
-        }
-    }
-    return worst;
+static inline std::string trim(const std::string& s) {
+    size_t i = 0, j = s.size();
+    while (i < j && std::isspace((unsigned char)s[i])) ++i;
+    while (j > i && std::isspace((unsigned char)s[j - 1])) --j;
+    return s.substr(i, j - i);
+}
+static inline std::string tolower_str(std::string s){
+    std::transform(s.begin(), s.end(), s.begin(),
+                   [](unsigned char c){ return (char)std::tolower(c); });
+    return s;
 }
 
-void LibParser::parseLib(const std::string& filename) {
+bool LibParser::isClockName(const std::string& pinName){
+    std::string p = tolower_str(pinName);
+    return (p == "ck" || p == "clk" || p == "cp" || p == "c");
+}
+
+bool LibParser::load(const std::string& filename) {
     std::ifstream fin(filename);
-    if (!fin.is_open()) {
-        std::cerr << "Error: cannot open " << filename << "\n";
+    if (!fin) {
+        std::cerr << "[LibParser] Cannot open file: " << filename << "\n";
+        return false;
+    }
+
+    std::string raw;
+    std::string curCell, curPin, relatedPin;
+    bool inCell = false, inPin = false, inIntPw = false, inRiseFall = false;
+    bool sawIdx1_in_this_RF = false, sawIdx2_in_this_RF = false;
+    double curWorst_accum_for_this_IP = 0.0;
+
+    while (std::getline(fin, raw)) {
+        std::string line = trim(raw);
+        if (line.empty()) continue;
+
+        // 單行 // 註解
+        auto cpos = line.find("//");
+        if (cpos != std::string::npos) line = trim(line.substr(0, cpos));
+        if (line.empty()) continue;
+
+        parseLine(line, curCell, curPin, inCell, inPin, inIntPw, inRiseFall,
+                  sawIdx1_in_this_RF, sawIdx2_in_this_RF, relatedPin, curWorst_accum_for_this_IP);
+    }
+    return true;
+}
+
+void LibParser::parseLine(const std::string& line,
+                          std::string& curCell,
+                          std::string& curPin,
+                          bool& inCell,
+                          bool& inPin,
+                          bool& inIntPw,
+                          bool& inRiseFall,
+                          bool& sawIdx1_in_this_RF,
+                          bool& sawIdx2_in_this_RF,
+                          std::string& relatedPin,
+                          double& curWorst_accum_for_this_IP) {
+    std::smatch m;
+
+    static const std::regex reCell    (R"(^\s*cell\s*\(\s*([^\s\)]+)\s*\)\s*\{)");
+    static const std::regex reArea    (R"(^\s*area\s*:\s*([+\-]?\d*\.?\d+(?:[eE][+\-]?\d+)?)\s*;)");
+    static const std::regex rePin     (R"(^\s*pin\s*\(\s*([^\s\)]+)\s*\)\s*\{)");
+    // internal_power() 或 internal_power(template)
+    static const std::regex reIntPw   (R"(^\s*internal_power\s*\([^\)]*\)\s*\{)");
+    static const std::regex reRelated (R"(^\s*related_pin\s*:\s*\"?([^\"]+)\"?\s*;)");
+    static const std::regex reRiseFall(R"(^\s*(rise_power|fall_power)\s*\([^\)]*\)\s*\{)");
+    static const std::regex reIdx1    (R"(\bindex_1\s*\()");
+    static const std::regex reIdx2    (R"(\bindex_2\s*\()");
+    static const std::regex reValues  (R"(values\s*\((.*)\))");
+    static const std::regex reBlockEnd(R"(^\s*\}\s*$)");
+
+    // 1) cell begin
+    if (std::regex_search(line, m, reCell)) {
+        curCell = m[1];
+        inCell = true;
+        if (!cells_.count(curCell)) cells_[curCell] = LibCellInfo{curCell, 0.0, 0.0};
         return;
     }
 
-    std::string line;
-    FFCellInfo cur_cell;
-    bool in_cell = false;
-    bool found_ck_power = false;
+    // 2) area
+    if (inCell && std::regex_search(line, m, reArea)) {
+        cells_[curCell].area = std::stod(m[1]);
+        return;
+    }
 
-    while (std::getline(fin, line)) {
-        // trim 空白
-        line.erase(line.begin(), std::find_if(line.begin(), line.end(),
-                   [](unsigned char c){ return !std::isspace(c); }));
-        line.erase(std::find_if(line.rbegin(), line.rend(),
-                   [](unsigned char c){ return !std::isspace(c); }).base(), line.end());
+    // 3) pin begin
+    if (inCell && std::regex_search(line, m, rePin)) {
+        curPin = m[1];
+        inPin = true;
+        return;
+    }
 
-        // ========== cell(...) ==========
-        if (line.find("cell(") == 0) {
-            in_cell = true;
-            cur_cell = FFCellInfo();
-            found_ck_power = false;
+    // 4) internal_power begin（在 pin 內）
+    if (inPin && std::regex_search(line, reIntPw)) {
+        inIntPw = true;
+        relatedPin.clear();
+        curWorst_accum_for_this_IP = 0.0;
+        // 若區塊內沒寫 related_pin，預設取當前 pin 名稱
+        relatedPin = curPin;
+        return;
+    }
 
-            auto start = line.find("(");
-            auto end   = line.find(")");
-            if (start != std::string::npos && end != std::string::npos) {
-                cur_cell.name = line.substr(start + 1, end - start - 1);
-            }
-        }
-        else if (in_cell && line.find("area") == 0) {
-            auto pos = line.find(":");
-            if (pos != std::string::npos) {
-                cur_cell.area = std::stod(line.substr(pos+1));
-            }
-        }
+    // 5) internal_power 內容
+    if (inIntPw && std::regex_search(line, m, reRelated)) {
+        relatedPin = m[1]; // 覆蓋預設
+        return;
+    }
 
-        // ========== pin(Q) ==========
-        else if (in_cell && line.find("pin(") == 0 && line.find("Q") != std::string::npos) {
-            while (std::getline(fin, line)) {
-                if (line.find("timing()") != std::string::npos) {
-                    bool related_ck = false;
-                    while (std::getline(fin, line)) {
-                        if (line.find("related_pin") != std::string::npos &&
-                            line.find("CK") != std::string::npos) {
-                            related_ck = true;
-                        }
-                        if (related_ck &&
-                            (line.find("cell_rise") != std::string::npos || line.find("cell_fall") != std::string::npos)) {
-                            while (std::getline(fin, line)) {
-                                if (line.find("values") != std::string::npos) {
-                                    double w = extractWorstValues(line);
-                                    cur_cell.cq_delay = std::max(cur_cell.cq_delay, w);
-                                    std::cout << "[Debug] Cell " << cur_cell.name
-                                              << " found CK->Q delay value = " << w << "\n";
-                                    break;
-                                }
-                            }
-                        }
-                        if (line.find("}") != std::string::npos) break;
-                    }
-                }
-                if (line.find("}") != std::string::npos) break;
-            }
-        }
+    // 6) 進入 rise_power / fall_power 表
+    if (inIntPw && std::regex_search(line, reRiseFall)) {
+        inRiseFall = true;
+        sawIdx1_in_this_RF = false;
+        sawIdx2_in_this_RF = false;
+        return;
+    }
 
-        // ========== pin(CK) ==========
-        else if (in_cell && line.find("pin(CK)") != std::string::npos) {
-            bool in_ck_pin = true;
-            std::cout << "[Debug] Found pin(CK) for cell " << cur_cell.name << "\n";
-            while (in_ck_pin && std::getline(fin, line)) {
-                if (line.find("internal_power") != std::string::npos) {
-                    std::string when_cond = "";
-                    double local_worst = 0.0;
-                    while (std::getline(fin, line)) {
-                        if (line.find("when") != std::string::npos) {
-                            auto pos = line.find(":");
-                            when_cond = line.substr(pos+1);
-                            when_cond.erase(std::remove(when_cond.begin(), when_cond.end(), '\"'),
-                                            when_cond.end());
-                        }
-                        if (line.find("values") != std::string::npos) {
-                            double w = extractWorstValues(line);
-                            local_worst = std::max(local_worst, w);
-                        }
-                        if (line.find("}") != std::string::npos) break; // end internal_power
-                    }
-                    if (local_worst > 0.0) {
-                        cur_cell.cq_power = std::max(cur_cell.cq_power, local_worst);
-                        std::cout << "[Debug] Cell " << cur_cell.name 
-                                << " CK internal_power when=" << when_cond
-                                << " worst=" << local_worst << "\n";
-                    }
-                }
-                if (line.find("}") != std::string::npos) {
-                    in_ck_pin = false; // end of pin(CK) block
+    // 7) 在 rise/fall 表中偵測 index_1 / index_2 與 values
+    if (inRiseFall) {
+        if (std::regex_search(line, reIdx1)) { sawIdx1_in_this_RF = true; return; }
+        if (std::regex_search(line, reIdx2)) { sawIdx2_in_this_RF = true; return; }
+
+        if (std::regex_search(line, m, reValues)) {
+            // 只有「出現 index_1 且未出現 index_2」的表才計入
+            if (sawIdx1_in_this_RF && !sawIdx2_in_this_RF) {
+                std::string vals = m[1];
+                static const std::regex reNum(R"(([+\-]?\d*\.?\d+(?:[eE][+\-]?\d+)?))");
+                for (std::sregex_iterator it(vals.begin(), vals.end(), reNum), ed; it != ed; ++it) {
+                    double v = std::stod((*it)[1]);
+                    if (v > curWorst_accum_for_this_IP) curWorst_accum_for_this_IP = v;
                 }
             }
+            return;
         }
+    }
 
-
-        // ========== 結束 cell ==========
-        else if (in_cell && line.find("}") != std::string::npos) {
-            if (!found_ck_power) {
-                std::cout << "[Debug] Cell " << cur_cell.name
-                          << " has NO CK internal power found!\n";
+    // 8) 任一區塊結束 '}' 的處理
+    if (std::regex_match(line, reBlockEnd)) {
+        if (inRiseFall) {
+            inRiseFall = false;
+            return;
+        }
+        if (inIntPw) {
+            // internal_power 區塊結束：若 relatedPin 是 clock 名，將本區塊累積值併入 cell 的 worst（取 max）
+            if (isClockName(relatedPin)) {
+                auto& slot = cells_[curCell].worst_clk_power_idx1;
+                if (curWorst_accum_for_this_IP > slot) slot = curWorst_accum_for_this_IP;
             }
-            ff_cells[cur_cell.name] = cur_cell;
-            in_cell = false;
+            inIntPw = false;
+            return;
+        }
+        if (inPin) {
+            inPin = false;
+            return;
+        }
+        if (inCell) {
+            inCell = false;
+            return;
         }
     }
 }
 
-void LibParser::debugPrint() const {
-    for (auto& kv : ff_cells) {
-        std::cout << "Cell " << kv.first
-                  << " | Area = " << kv.second.area
-                  << " | CQ Delay = " << kv.second.cq_delay
-                  << " | CQ Power = " << kv.second.cq_power
+const LibCellInfo* LibParser::getCell(const std::string& name) const {
+    auto it = cells_.find(name);
+    if (it == cells_.end()) return nullptr;
+    return &it->second;
+}
+
+void LibParser::debugPrint(int limit) const {
+    int cnt = 0;
+    for (const auto& kv : cells_) {
+        std::cout << "[Lib] " << kv.first
+                  << " | area=" << kv.second.area
+                  << " | worst_clk_power_idx1=" << kv.second.worst_clk_power_idx1
                   << "\n";
+        if (++cnt >= limit) break;
     }
 }

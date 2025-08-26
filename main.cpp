@@ -7,7 +7,7 @@
 #include "Banking.h"
 #include "PlacementStructure.h"
 #include "CompatParser.h"
-
+#include "LibParser.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -170,7 +170,40 @@ int main(int argc, char** argv) {
 
     // ============ Banking with compatibility ============
     my_lefdef::Banking banking(ff_copy);
-    banking.run_big(maps, /*tau_merge=*/1.0, /*max_pair_dist=*/2500.0, /*h_cap=*/2000.0);
+    banking.run_big(maps, /*tau_merge=*/1.5, /*max_pair_dist=*/2500.0, /*h_cap=*/2000.0);
 
+
+    // LibParser lib;
+    // if (lib.load("testcase3/SNPSHOPT25/liberty/nldm/base/snps25hopt_base_ff0p88v25c.lib")) {
+    //     std::cout << "[LibParser] Load success!\n";
+    //     lib.debugPrint(10); // 印前 10 顆 cell
+    // } else {
+    //     std::cout << "[LibParser] Load failed.\n";
+    // }
+
+    std::cout << "\n========== Liberty (.lib) Quick Check (index_1 only) ==========\n";
+    LibParser lib;
+    if (lib.load("testcase3/SNPSHOPT25/liberty/nldm/base/snps25hopt_base_ff0p88v25c.lib")) { // ← 換成你的 .lib 路徑
+        std::cout << "[LibParser] Loaded.\n";
+        lib.debugPrint(10); // 先看看前 10 個 cell
+
+        // 指定幾顆 cell 檢查
+        const char* probes[] = {
+            "SNPSHOPT25_FSDN_V2_1",
+            "SNPSHOPT25_FSDN4_V2_0P5"
+        };
+        for (auto p : probes) {
+            if (auto* info = lib.getCell(p)) {
+                std::cout << "[Probe] " << p
+                          << " | area=" << info->area
+                          << " | worst_clk_power_idx1=" << info->worst_clk_power_idx1
+                          << "\n";
+            } else {
+                std::cout << "[Probe] " << p << " not found in .lib\n";
+            }
+        }
+    } else {
+        std::cout << "[LibParser] Load failed.\n";
+    }
     return 0;
 }
