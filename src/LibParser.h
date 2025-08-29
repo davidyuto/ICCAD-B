@@ -2,39 +2,30 @@
 #include <string>
 #include <unordered_map>
 
-struct LibCellInfo {
-    std::string name;
+struct FFPowerArea {
     double area = 0.0;
-    double worst_clk_power_idx1 = 0.0; // 只取 index_1（無 index_2）的 internal_power（CK/CLK/CP/C）
+    double power = 0.0; // 取自 pin(Q) 下、related_pin="CK" 的 internal_power values 平均
 };
 
 class LibParser {
 public:
-    // 載入單一 .lib（可呼叫多次以合併）
-    bool load(const std::string& filename);
+    // 載入單一 .lib
+    bool loadLib(const std::string& path);
 
-    // 查詢
-    const LibCellInfo* getCell(const std::string& name) const;
-    const std::unordered_map<std::string, LibCellInfo>& allCells() const { return cells_; }
+    // 查詢：若查不到回傳 {0,0}
+    FFPowerArea getFFPowerArea(const std::string& cell) const;
 
-    // Debug：印前 N 筆
-    void debugPrint(int limit = 10) const;
+    // 全部 FF 對照表：cell_name -> {area, power}
+    const std::unordered_map<std::string, FFPowerArea>& table() const { return ff_; }
 
 private:
-    std::unordered_map<std::string, LibCellInfo> cells_;
+    std::unordered_map<std::string, FFPowerArea> ff_; // 只存 FF（FSDN/LSRDPQ/LSRD）
 
-    // 逐行解析 state machine
-    void parseLine(const std::string& line,
-                   std::string& curCell,
-                   std::string& curPin,
-                   bool& inCell,
-                   bool& inPin,
-                   bool& inIntPw,
-                   bool& inRiseFall,
-                   bool& sawIdx1_in_this_RF,
-                   bool& sawIdx2_in_this_RF,
-                   std::string& relatedPin,
-                   double& curWorst_accum_for_this_IP);
+    static void stripComments(std::string& s);
+    static bool isFFName(const std::string& cellName); // 名稱含 FSDN 或 LSRDPQ/LSRD 即視為 FF
 
-    static bool isClockName(const std::string& pinName); // CK/CLK/CP/C（大小寫不敏感）
+    bool parseOneFile(const std::string& path);
+
+    // 小工具：把一串 "values(...)"（可能含多行與反斜線續行）裡的數字抽出並追加到 sum/cnt
+    static void accumulateValuesFromBlock(const std::string& block, double& sum, size_t& cnt);
 };

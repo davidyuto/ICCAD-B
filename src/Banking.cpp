@@ -1,64 +1,229 @@
 #include "Banking.h"
-#include "CompatParser.h"
 #include <iostream>
 #include <cmath>
+#include <limits>
 #include <unordered_map>
 #include <unordered_set>
-#include <array>
+#include <algorithm>
 
 namespace my_lefdef {
 
-static inline double dist2_new(const FlipFlop& a, const FlipFlop& b){
-    double dx = double(a.new_x)-double(b.new_x);
-    double dy = double(a.new_y)-double(b.new_y);
-    return dx*dx+dy*dy;
+inline double Banking::dist2_new(const FlipFlop& a, const FlipFlop& b) {
+    double dx = double(a.new_x) - double(b.new_x);
+    double dy = double(a.new_y) - double(b.new_y);
+    return dx*dx + dy*dy;
 }
 
-static bool singles_have_common_mbff(const std::string& mA,const std::string& mB,const CompatMaps& maps){
-    const auto& A = CompatParser::single_to_multi(maps,mA);
-    const auto& B = CompatParser::single_to_multi(maps,mB);
-    if (A.empty()||B.empty()) return false;
-    std::unordered_set<std::string> s(A.begin(),A.end());
-    for (auto& x:B) if (s.count(x)) return true;
+static bool singles_have_common_mbff(const std::string& mA,
+                                     const std::string& mB,
+                                     const CompatMaps& maps) {
+    const auto& A = CompatParser::single_to_multi(maps, mA);
+    const auto& B = CompatParser::single_to_multi(maps, mB);
+    if (A.empty() || B.empty()) return false;
+    std::unordered_set<std::string> s(A.begin(), A.end());
+    for (const auto& x : B) if (s.count(x)) return true;
     return false;
 }
 
-Banking::Banking(std::vector<FlipFlop>& ffs):ffs_(ffs){}
+Banking::Banking(std::vector<FlipFlop>& ffs, const LibParser& lib)
+: ffs_(ffs), lib_(lib) {}
 
-void Banking::run_big(const CompatMaps& maps,double tau_merge,double max_pair_dist,double h_cap){
+double Banking::computeCost(const std::string& mbff_macro,
+                            const std::vector<FlipFlop*>& bits) const {
+    const FFPowerArea info = lib_.getFFPowerArea(mbff_macro);
+    if (info.area <= 0.0 && info.power <= 0.0)
+        return std::numeric_limits<double>::max();
+
+    int cx = 0, cy = 0;
+    for (auto* ff : bits) { cx += ff->new_x; cy += ff->new_y; }
+    cx /= (int)bits.size(); cy /= (int)bits.size();
+
+    double disp = 0.0;
+    for (auto* ff : bits) {
+        double dx = ff->new_x - cx;
+        double dy = ff->new_y - cy;
+        disp += std::sqrt(dx*dx + dy*dy);
+    }
+
+    // === Cost function ===
+    double cost = disp * 0.05 + info.area + info.power;
+
+    // === Debug 印出詳細資訊 ===
+    // std::cout << "[Cost] macro=" << mbff_macro
+    //           << " bits=" << bits.size()
+    //           << " area=" << info.area
+    //           << " power=" << info.power
+    //           << " disp=" << disp
+    //           << " => cost=" << cost << "\n";
+
+    return cost;
+}
+
+
+
+std::string Banking::pickMBFFMacro(const std::vector<FlipFlop*>& bits,
+                                   const CompatMaps& maps) const {
+    size_t B = bits.size();
+    if (B != 2 && B != 4) return "";
+
+    std::unordered_set<std::string> common;
+    bool first = true;
+    for (auto* ff : bits) {
+        const auto& cands = CompatParser::single_to_multi(maps, ff->macro);
+        if (cands.empty()) return "";
+        if (first) {
+            common.insert(cands.begin(), cands.end());
+            first = false;
+        } else {
+            std::unordered_set<std::string> tmp;
+            for (auto& c : cands) if (common.count(c)) tmp.insert(c);
+            common.swap(tmp);
+        }
+    }
+    if (common.empty()) return "";
+
+    // 過濾符合 2/4-bit 的名稱
+    std::vector<std::string> filtered;
+    for (auto& mb : common) {
+        if ((B == 2 && mb.find("2") != std::string::npos) ||
+            (B == 4 && mb.find("4") != std::string::npos)) {
+            filtered.push_back(mb);
+        }
+    }
+    if (filtered.empty()) filtered.assign(common.begin(), common.end());
+
+    std::string best;
+    double bestCost = std::numeric_limits<double>::max();
+    for (auto& mb : filtered) {
+        double c = computeCost(mb, bits);
+        if (c < bestCost) { bestCost = c; best = mb; }
+    }
+    return best;
+}
+
+
+void Banking::mergeCluster(const CompatMaps& maps) {
+    // ===== Debug: 統計合併前 =====
+    int before_single = 0;
+    for (auto& c : clusters_) {
+        if ((int)c.getFFs().size() == 1) before_single++;
+    }
+    std::cout << "\n[mergeCluster] Before merge: " << before_single << " clusters with size=1\n";
+
+    std::vector<Cluster> newClusters;
+    std::unordered_set<int> merged;
+
+    for (size_t i = 0; i < clusters_.size(); i++) {
+        if (merged.count(i)) continue;
+        Cluster& ci = clusters_[i];
+
+        if (ci.getFFs().size() == 1) {
+            FlipFlop* f1 = ci.getFFs()[0];
+            Cluster* best = nullptr;
+            double bestDist = 1e9;
+
+            for (size_t j = 0; j < clusters_.size(); j++) {
+                if (i == j || merged.count(j)) continue;
+                Cluster& cj = clusters_[j];
+                if (cj.getFFs().size() > 8) continue; // 避免過大 cluster
+
+                if (f1->clk_net != cj.getFFs()[0]->clk_net) continue;
+
+                double dx = f1->new_x - cj.getCenterX();
+                double dy = f1->new_y - cj.getCenterY();
+                double dist = std::sqrt(dx*dx + dy*dy);
+
+                double avg_bw = (f1->bandwidth + cj.getFFs()[0]->bandwidth) / 2;
+                double threshold =  0.8*avg_bw; // heuristic 門檻
+
+                if (dist < threshold && dist < bestDist) {
+                    best = &cj;
+                    bestDist = dist;
+                }
+            }
+
+            if (best) {
+                best->addFF(f1);
+                best->computeCenter();
+                merged.insert(i);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < clusters_.size(); i++) {
+        if (!merged.count(i)) newClusters.push_back(std::move(clusters_[i]));
+    }
+    clusters_.swap(newClusters);
+
+    // ===== Debug: 統計合併後 =====
+    int after_single = 0;
+    for (auto& c : clusters_) {
+        if ((int)c.getFFs().size() == 1) after_single++;
+    }
+    std::cout << "[mergeCluster] After merge:  " << after_single << " clusters with size=1\n";
+    std::cout << "[mergeCluster] Reduced:     " << (before_single - after_single) << " clusters merged\n";
+}
+
+void Banking::run_big(const CompatMaps& maps,
+                      double tau_merge,
+                      double max_pair_dist,
+                      double h_cap,
+                      int forceK,          // Auto-K 用，強制指定 K
+                      bool doBanking) {    // 是否要跑到 Banking
     clusters_.clear();
-    std::unordered_map<std::string,std::vector<int>> by_clk;
-    for(int i=0;i<(int)ffs_.size();i++){
-        std::string key = ffs_[i].clk_net.empty()?"__NOCLK__":ffs_[i].clk_net;
+    mbff_groups_.clear();
+
+    // === Step 0: 如果 forceK > 0，先用這個 K 重建 bandwidth ===
+    if (forceK > 0) {
+        std::cout << "[run_big] Re-clustering with forceK=" << forceK << "\n";
+        my_lefdef::FlipFlopClustering cl(ffs_);
+        cl.buildRTree();
+        cl.initKNN(forceK, 4000*4000);
+        cl.shiftAllFlipFlops();
+
+        // 把新的座標與 bandwidth 寫回 ffs_
+        const auto& ffs_new = cl.getFFs();
+        for (size_t i = 0; i < ffs_.size(); i++) {
+            ffs_[i].new_x      = ffs_new[i].new_x;
+            ffs_[i].new_y      = ffs_new[i].new_y;
+            ffs_[i].bandwidth  = ffs_new[i].bandwidth;
+            ffs_[i].isShifting = ffs_new[i].isShifting;
+        }
+    }
+
+    // === Step 1: Clock domain 分組 ===
+    std::unordered_map<std::string, std::vector<int>> by_clk;
+    for (int i = 0; i < (int)ffs_.size(); i++) {
+        std::string key = ffs_[i].clk_net.empty() ? "__NOCLK__" : ffs_[i].clk_net;
         by_clk[key].push_back(i);
     }
 
-    std::vector<int> belong(ffs_.size(),-1);
-    int next_cluster_id=0;
+    std::vector<int> belong(ffs_.size(), -1);
+    int cid = 0;
 
-    for(auto& kv:by_clk){
+    // === Step 2: Clustering ===
+    for (auto& kv : by_clk) {
         const auto& idxs = kv.second;
-        for(size_t ii=0;ii<idxs.size();ii++){
-            int i=idxs[ii];
-            if(belong[i]!=-1) continue;
+        for (size_t a = 0; a < idxs.size(); a++) {
+            int i = idxs[a];
+            if (belong[i] != -1) continue;
 
-            Cluster c(next_cluster_id++);
+            Cluster c(cid++);
             c.addFF(&ffs_[i]);
-            belong[i]=c.getID();
-            double hi = std::min(ffs_[i].bandwidth,h_cap);
+            belong[i] = c.getID();
+            double hi = std::min(ffs_[i].bandwidth, h_cap);
 
-            for(size_t jj=ii+1;jj<idxs.size();jj++){
-                int j=idxs[jj];
-                if(belong[j]!=-1) continue;
-                double hj=std::min(ffs_[j].bandwidth,h_cap);
-                double eps=tau_merge*std::min(hi,hj);
-                double d=std::sqrt(dist2_new(ffs_[i],ffs_[j]));
-                if(d>max_pair_dist) continue;
-                if(d<=eps){
-                    // 相容判斷
-                    if(singles_have_common_mbff(ffs_[i].macro,ffs_[j].macro,maps)){
+            for (size_t b = a+1; b < idxs.size(); b++) {
+                int j = idxs[b];
+                if (belong[j] != -1) continue;
+                double hj = std::min(ffs_[j].bandwidth, h_cap);
+                double eps = tau_merge * std::min(hi, hj);
+                double d = std::sqrt(dist2_new(ffs_[i], ffs_[j]));
+                if (d > max_pair_dist) continue;
+                if (d <= eps) {
+                    if (singles_have_common_mbff(ffs_[i].macro, ffs_[j].macro, maps)) {
                         c.addFF(&ffs_[j]);
-                        belong[j]=c.getID();
+                        belong[j] = c.getID();
                     }
                 }
             }
@@ -67,119 +232,69 @@ void Banking::run_big(const CompatMaps& maps,double tau_merge,double max_pair_di
         }
     }
 
-    // debug: 分布
-    std::unordered_map<int,int> hist;
-    for(auto& c:clusters_) hist[c.getFFs().size()]++;
-    std::cout<<"\n[Banking Result] Clusters="<<clusters_.size()<<"\n";
-    for(auto& kv:hist){
-        std::cout<<" size "<<kv.first<<" : "<<kv.second<<"\n";
+    // === Step 3: 如果只要 Clustering，直接返回 ===
+    if (!doBanking) {
+        std::cout << "[run_big] Skip banking, only clustering (K="
+                  << (forceK > 0 ? forceK : -1) << ")\n";
+        return;
     }
-        // === Clock-domain-wise histograms ===
-    std::unordered_map<std::string, std::unordered_map<int,int>> dom_hist; // clk -> (size -> count)
-    std::unordered_map<int, std::string> cluster_clk; // clusterID -> clk
 
-    // 先建立 clusterID -> clk 的對應
-    for (const auto& kv2 : by_clk) {
-        const std::string& clk = kv2.first;
-        const auto& idxs = kv2.second;
-        // 走訪該 domain 的 FF，把其屬的 cluster 記下
-        for (int i : idxs) {
-            // 找出 i 所屬 cluster
-            // belong[i] 在前面已經填好
-            int cid = belong[i];
-            if (cid >= 0) {
-                cluster_clk[cid] = clk;
+    // === Step 4: Cluster → MBFF (Banking) ===
+    const double displacement_threshold = 1500.0;
+    int gid = 0;
+    for (auto& c : clusters_) {
+        std::vector<FlipFlop*> bits;
+        c.computeCenter();
+        for (auto* ff : c.getFFs()) {
+            double dx = ff->new_x - c.getCenterX();
+            double dy = ff->new_y - c.getCenterY();
+            double disp = std::sqrt(dx*dx + dy*dy);
+            if (disp <= displacement_threshold) {
+                bits.push_back(ff);
+            }
+        }
+
+        int n = (int)bits.size();
+        while (n >= 4) {
+            std::vector<FlipFlop*> sub(bits.end()-4, bits.end());
+            bits.erase(bits.end()-4, bits.end());
+            n -= 4;
+            std::string mb = pickMBFFMacro(sub, maps);
+            if (!mb.empty()) {
+                MBFFGroup g{gid++, mb, sub,
+                            c.getCenterX(), c.getCenterY(),
+                            computeCost(mb, sub)};
+                mbff_groups_.push_back(std::move(g));
+            }
+        }
+        if (n == 2) {
+            std::vector<FlipFlop*> sub(bits.end()-2, bits.end());
+            std::string mb = pickMBFFMacro(sub, maps);
+            if (!mb.empty()) {
+                MBFFGroup g{gid++, mb, sub,
+                            c.getCenterX(), c.getCenterY(),
+                            computeCost(mb, sub)};
+                mbff_groups_.push_back(std::move(g));
             }
         }
     }
 
-    // 統計每個 cluster 在該 clk 的大小
-    for (const auto& c : clusters_) {
-        std::string clk = "__UNKNOWN__";
-        auto it = cluster_clk.find(c.getID());
-        if (it != cluster_clk.end()) clk = it->second;
-        int sz = (int)c.getFFs().size();
-        dom_hist[clk][sz]++;
+    // === Step 5: Debug 輸出 ===
+    std::cout << "\n[Banking] Final MBFF groups = " << mbff_groups_.size() << "\n";
+    std::unordered_map<int,int> sizeHist;
+    for (const auto& g : mbff_groups_) sizeHist[g.bits.size()]++;
+    std::cout << "\n========== Banking MBFF Size Distribution ==========\n";
+    for (auto& kv : sizeHist) {
+        std::cout << "  size=" << kv.first << " : " << kv.second << " groups\n";
     }
 
-    // 列印
-    std::cout << "\n[Banking Result by Clock Domain]\n";
-    for (const auto& kvd : dom_hist) {
-        const auto& clk = kvd.first;
-        std::cout << "  Clock Domain: " << clk << "\n";
-        // 排序後列印
-        std::vector<std::pair<int,int>> items(kvd.second.begin(), kvd.second.end());
-        std::sort(items.begin(), items.end());
-        for (auto& p : items) {
-            std::cout << "    size " << p.first << " : " << p.second << "\n";
-        }
+    std::unordered_map<int,int> clusterSizeHist;
+    for (const auto& c : clusters_) clusterSizeHist[(int)c.getFFs().size()]++;
+    std::cout << "\n========== Cluster Size Distribution ==========\n";
+    for (auto& kv : clusterSizeHist) {
+        std::cout << " size=" << kv.first << " : " << kv.second << " clusters\n";
     }
-    // === For each clock domain, print two sample clusters with all FFs ===
-    std::unordered_map<std::string, std::vector<int>> dom2clusters; // clk -> cluster IDs (unique)
-    {
-        std::unordered_set<int> seen;
-        for (const auto& c : clusters_) {
-            auto it = cluster_clk.find(c.getID());
-            std::string clk = (it == cluster_clk.end()) ? "__UNKNOWN__" : it->second;
-            dom2clusters[clk].push_back(c.getID());
-        }
-        // 去重（保險）
-        for (auto& kvd : dom2clusters) {
-            auto& v = kvd.second;
-            std::sort(v.begin(), v.end());
-            v.erase(std::unique(v.begin(), v.end()), v.end());
-        }
-    }
-
-    std::cout << "\n[Sample Clusters per Clock Domain]\n";
-    for (const auto& kvd : dom2clusters) {
-        const std::string& clk = kvd.first;
-        const auto& vec = kvd.second;
-        if (vec.empty()) continue;
-
-        std::cout << "  Clock Domain: " << clk << "\n";
-
-        // 只挑前兩個
-        int pick = std::min<int>(2, (int)vec.size());
-        for (int k = 0; k < pick; ++k) {
-            int cid = vec[k];
-            // 找到 cluster 物件
-            const Cluster* pc = nullptr;
-            for (const auto& c : clusters_) if (c.getID() == cid) { pc = &c; break; }
-            if (!pc) continue;
-
-            std::cout << "    Cluster #" << cid
-                    << " | size=" << pc->getFFs().size()
-                    << " | center=(" << pc->getCenterX() << "," << pc->getCenterY() << ")\n";
-
-            // 列出所有 FF 的 name / macro / (new_x,new_y) / D/Q/CLK net（若可）
-            for (auto* ff : pc->getFFs()) {
-                std::cout << "      - " << ff->name
-                        << " | macro=" << ff->macro
-                        << " | new=(" << ff->new_x << "," << ff->new_y << ")"
-                        << " | D="   << (ff->fanin_net.empty()  ? "None" : ff->fanin_net)
-                        << " | Q="   << (ff->fanout_net.empty() ? "None" : ff->fanout_net)
-                        << " | CLK=" << (ff->clk_net.empty()    ? "None" : ff->clk_net)
-                        << "\n";
-            }
-
-            // 額外：快速 pairwise 相容「概略」檢查（是否有共同 MBFF 候選）
-            bool all_pair_compatible = true;
-            for (size_t i = 0; i < pc->getFFs().size() && all_pair_compatible; ++i) {
-                for (size_t j = i+1; j < pc->getFFs().size(); ++j) {
-                    const auto* A = pc->getFFs()[i];
-                    const auto* B = pc->getFFs()[j];
-                    if (!singles_have_common_mbff(A->macro, B->macro, maps)) {
-                        all_pair_compatible = false;
-                        break;
-                    }
-                }
-            }
-            std::cout << "      [compat-check] pairwise-common-MBFF = "
-                    << (all_pair_compatible ? "PASS" : "FAIL (manual check needed)") << "\n";
-        }
-    }
-
 }
 
-} // namespace
+
+} // namespace my_lefdef

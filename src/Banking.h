@@ -2,31 +2,53 @@
 #pragma once
 #include <vector>
 #include <string>
+#include <unordered_map>
 #include "Cluster.h"
-#include "CompatParser.h"   // ★ 新增：讓 CompatMaps 已宣告
+#include "CompatParser.h"
+#include "LefDefParser.h"
+#include "MeanShift.h"
+#include "LibParser.h"
 
 namespace my_lefdef {
 
+struct MBFFGroup {
+    int id = -1;
+    std::string macro;              // 選定的 MBFF 宏名（來自真 .lib）
+    std::vector<FlipFlop*> bits;    // 被合併的 1-bit FF
+    int place_x = 0, place_y = 0;   // 擬定放置位置（cluster center）
+    double cost = 0.0;              // costFunction 分數
+};
+
 class Banking {
 public:
-    Banking(std::vector<FlipFlop>& ffs);
+    Banking(std::vector<FlipFlop>& ffs, const LibParser& lib);
 
-    void run();
-
-    // ★ 新版：需要相容表 maps
     void run_big(const CompatMaps& maps,
-                 double tau_merge = 0.6,
-                 double max_pair_dist = 2500.0,
-                 double h_cap = 2000.0);
+             double tau_merge = 1.5,
+             double max_pair_dist = 2500.0,
+             double h_cap = 2000.0,
+             int forceK = -1,        // 強制指定 K (Auto-K 用)
+             bool doBanking = true); // 是否要跑到 Banking
 
-    // ★ 舊版 wrapper：維持相容性；若有人仍呼叫舊版，會報錯提示或直接走無相容分桶（你可擇一）
-    void run_big(double tau_merge, double max_pair_dist, double h_cap);
+    const std::vector<Cluster>&   getClusters() const { return clusters_; }
+    const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
 
-    const std::vector<Cluster>& getClusters() const { return clusters_; }
+private:
+    double computeCost(const std::string& mbff_macro,
+                       const std::vector<FlipFlop*>& bits) const;
+
+    std::string pickMBFFMacro(const std::vector<FlipFlop*>& bits,
+                              const CompatMaps& maps) const;
+    void mergeCluster(const CompatMaps& maps);
+    static inline double dist2_new(const FlipFlop& a, const FlipFlop& b);
 
 private:
     std::vector<FlipFlop>& ffs_;
+    const LibParser& lib_;
+
     std::vector<Cluster> clusters_;
+    std::vector<MBFFGroup> mbff_groups_;
+    
 };
 
 } // namespace my_lefdef

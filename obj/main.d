@@ -25,7 +25,7 @@ obj/main.o: main.cpp parser/util/Logger.h parser/util/Watch.h \
  parser/include/def/defiFill.hpp parser/include/def/defiNonDefault.hpp \
  parser/include/def/defiPropType.hpp src/MeanShift.h src/LefDefParser.h \
  src/Cluster.h src/Cluster.h src/Banking.h src/CompatParser.h \
- src/PlacementStructure.h src/LibParser.h
+ src/LibParser.h src/PlacementStructure.h
 parser/util/Logger.h:
 parser/util/Watch.h:
 parser/util/ArgParser.h:
@@ -85,5 +85,5 @@ src/Cluster.h:
 src/Cluster.h:
 src/Banking.h:
 src/CompatParser.h:
-src/PlacementStructure.h:
 src/LibParser.h:
+src/PlacementStructure.h:
