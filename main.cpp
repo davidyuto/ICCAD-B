@@ -13,6 +13,9 @@
 #include "PlacementStructure.h"
 #include "CompatParser.h"
 #include "LibParser.h"
+#include "Legalizer/Legalizer.hpp"
+#include "Legalizer/Data.hpp"
+#include "Legalizer/ResultWriter.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -170,7 +173,14 @@ int main(int argc, char** argv) {
     banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
     banking.debugClusterBanking(maps, 5);  // 只印前 5 個 cluster
     banking.printFinalGroups({0,2,5}); // 只看 MBFFGroup ID=0,2,5
+    banking.writeListFile("output.list");
 
+    Input input;                     // 自動吃 last_banking_result
+    Legalizer legalizer(&input);
+    auto result = legalizer.solve(); // 得到結果 writer
+
+    // === Write Result ===
+    result->write("output.txt"); 
 
 
     return 0;

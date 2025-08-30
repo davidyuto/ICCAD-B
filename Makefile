@@ -19,9 +19,11 @@ CXXFLAGS += -MMD -MP
 # === 來源檔 ===
 SRCS = main.cpp \
        $(wildcard src/*.cpp) \
+       $(wildcard src/Legalizer/*.cpp) \
        $(wildcard util/*.cpp) \
        $(wildcard parser/util/*.cpp) \
        $(wildcard parser/common/*.cpp)
+
 
 # 扁平化輸出至 obj/
 OBJS = $(addprefix $(OBJS_DIR)/, $(notdir $(SRCS:%.cpp=%.o)))

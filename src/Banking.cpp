@@ -7,6 +7,7 @@
 #include <algorithm>
 
 namespace my_lefdef {
+std::vector<MBFFGroup> last_banking_result;
 
 inline double Banking::dist2_new(const FlipFlop& a, const FlipFlop& b) {
     double dx = double(a.new_x) - double(b.new_x);
@@ -387,6 +388,28 @@ void Banking::run_big(const CompatMaps& maps,
                 mbff_groups_.push_back(std::move(g));
             }
         }
+        else if (n == 1) {
+            std::vector<FlipFlop*> sub(bits.end()-1, bits.end());
+            FlipFlop* ff = sub[0];
+
+            MBFFGroup g;
+            g.id      = gid++;
+            g.macro   = ff->macro;          // 單顆就直接用原本 macro
+            g.bits    = sub;
+            g.place_x = ff->new_x;
+            g.place_y = ff->new_y;
+            g.cost    = lib_.getFFPowerArea(ff->macro).area +
+                        lib_.getFFPowerArea(ff->macro).power;
+
+            g.inst_name = ff->name;         // 保留原本 instance 名
+
+            auto info = lib_.getFFPowerArea(ff->macro);
+            g.area = info.area;
+            g.width  = ff->width;
+            g.height = ff->height;
+
+            mbff_groups_.push_back(std::move(g));
+        }
     }
 
     // === Step 5: Debug 輸出 ===
@@ -424,6 +447,7 @@ void Banking::run_big(const CompatMaps& maps,
                       << " (" << ff->new_x << "," << ff->new_y << ")\n";
         }
     }
+    last_banking_result = mbff_groups_;
 }
 
 void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
@@ -447,6 +471,44 @@ void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
     }
 }
 
+void Banking::writeListFile(const std::string& filename) const {
+    std::ofstream fout(filename);
+    if (!fout) {
+        std::cerr << "[Error] Cannot open " << filename << " for writing.\n";
+        return;
+    }
+
+    // ================= Part 1: Pin Mapping =================
+    // CellInst 行數 = 最終的 sequential instance 數量
+    fout << "CellInst " << mbff_groups_.size() << "\n";
+
+    for (const auto& g : mbff_groups_) {
+        // Pin mapping：每個 FF 的 D/Q/CLK 對應到新 MBFF 的 Dk/Qk/CLK
+        for (size_t i = 0; i < g.bits.size(); i++) {
+            auto* ff = g.bits[i];
+            fout << ff->name << "/D map " << g.inst_name << "/D" << i << "\n";
+            fout << ff->name << "/Q map " << g.inst_name << "/Q" << i << "\n";
+            fout << ff->name << "/CK map " << g.inst_name << "/CLK\n";
+        }
+    }
+    fout << "\n";
+
+    // ================= Part 2: Operation Log =================
+    fout << "OPERATION " << mbff_groups_.size() << "\n";
+
+    int op_id = 0;
+    for (const auto& g : mbff_groups_) {
+        fout << "create_multibit { ";
+        for (auto* ff : g.bits) {
+            fout << "{" << ff->name << " " << ff->macro << " 1} ";
+        }
+        fout << "{" << g.inst_name << " " << g.macro << " " << g.bits.size() << "} }\n";
+        op_id++;
+    }
+
+    fout.close();
+    std::cout << "[Output] Wrote list file: " << filename << "\n";
+}
 
 
 } // namespace my_lefdef
