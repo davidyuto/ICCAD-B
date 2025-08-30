@@ -14,11 +14,15 @@ namespace my_lefdef {
 
 struct MBFFGroup {
     int id = -1;
-    std::string macro;              // 選定的 MBFF 宏名（來自真 .lib）
-    std::vector<FlipFlop*> bits;    // 被合併的 1-bit FF
-    int place_x = 0, place_y = 0;   // 擬定放置位置（cluster center）
-    double cost = 0.0;              // costFunction 分數
+    std::string inst_name;
+    std::string macro;
+    std::vector<FlipFlop*> bits;
+    int place_x = 0, place_y = 0;
+    double cost = 0.0;
+    double width = 0.0, height = 0.0;
+    double area = 0.0;   // << 新增：從 .lib 抓的 area
 };
+
 
 class Banking {
 public:

@@ -229,13 +229,11 @@ void Banking::run_big(const CompatMaps& maps,
 
     // === Step 0: 如果 forceK > 0，先用這個 K 重建 bandwidth ===
     if (forceK > 0) {
-        // std::cout << "[run_big] Re-clustering with forceK=" << forceK << "\n";
         my_lefdef::FlipFlopClustering cl(ffs_);
         cl.buildRTree();
         cl.initKNN(forceK, 4000*4000);
         cl.shiftAllFlipFlops();
 
-        // 把新的座標與 bandwidth 寫回 ffs_
         const auto& ffs_new = cl.getFFs();
         for (size_t i = 0; i < ffs_.size(); i++) {
             ffs_[i].new_x      = ffs_new[i].new_x;
@@ -255,14 +253,13 @@ void Banking::run_big(const CompatMaps& maps,
     std::vector<int> belong(ffs_.size(), -1);
     int cid = 0;
 
-        // === Debug: Clock domains summary ===
     std::cout << "\n========== Clock Domain Summary ==========\n";
     for (auto& kv : by_clk) {
         const std::string& clk = kv.first;
         const auto& idxs = kv.second;
         std::cout << "CLK = " << clk
                   << "  #FFs = " << idxs.size() << "\n";
-        for (int k = 0; k < 5 ; k++) {
+        for (int k = 0; k < 5 && k < (int)idxs.size(); k++) {
             const FlipFlop& ff = ffs_[idxs[k]];
             std::cout << "   - " << ff.name
                       << " (macro=" << ff.macro
@@ -312,6 +309,8 @@ void Banking::run_big(const CompatMaps& maps,
         return;
     }
 
+    auto& ldp = my_lefdef::LefDefParser::get_instance();
+
     // === Step 4: Cluster → MBFF (Banking) ===
     const double displacement_threshold = 1500.0;
     int gid = 0;
@@ -334,9 +333,28 @@ void Banking::run_big(const CompatMaps& maps,
             n -= 4;
             std::string mb = pickMBFFMacro(sub, maps);
             if (!mb.empty()) {
-                MBFFGroup g{gid++, mb, sub,
-                            c.getCenterX(), c.getCenterY(),
-                            computeCost(mb, sub)};
+                MBFFGroup g;
+                g.id      = gid++;
+                g.macro   = mb;
+                g.bits    = sub;
+                g.place_x = c.getCenterX();
+                g.place_y = c.getCenterY();
+                g.cost    = computeCost(mb, sub);
+
+                g.inst_name = (sub.size() == 1) ? sub[0]->name : sub[0]->name + "_mb";
+
+                auto info = lib_.getFFPowerArea(mb);
+                g.area = info.area;
+
+                auto lef_mb = ldp.get_def().get_component(mb);
+                if (lef_mb && lef_mb->lef_macro_) {
+                    g.width  = lef_mb->lef_macro_->size_x_;
+                    g.height = lef_mb->lef_macro_->size_y_;
+                } else if (g.area > 0) {
+                    g.width  = std::sqrt(g.area);
+                    g.height = g.area / g.width;
+                }
+
                 mbff_groups_.push_back(std::move(g));
             }
         }
@@ -344,9 +362,28 @@ void Banking::run_big(const CompatMaps& maps,
             std::vector<FlipFlop*> sub(bits.end()-2, bits.end());
             std::string mb = pickMBFFMacro(sub, maps);
             if (!mb.empty()) {
-                MBFFGroup g{gid++, mb, sub,
-                            c.getCenterX(), c.getCenterY(),
-                            computeCost(mb, sub)};
+                MBFFGroup g;
+                g.id      = gid++;
+                g.macro   = mb;
+                g.bits    = sub;
+                g.place_x = c.getCenterX();
+                g.place_y = c.getCenterY();
+                g.cost    = computeCost(mb, sub);
+
+                g.inst_name = (sub.size() == 1) ? sub[0]->name : sub[0]->name + "_mb";
+
+                auto info = lib_.getFFPowerArea(mb);
+                g.area = info.area;
+
+                auto lef_mb = ldp.get_def().get_component(mb);
+                if (lef_mb && lef_mb->lef_macro_) {
+                    g.width  = lef_mb->lef_macro_->size_x_;
+                    g.height = lef_mb->lef_macro_->size_y_;
+                } else if (g.area > 0) {
+                    g.width  = std::sqrt(g.area);
+                    g.height = g.area / g.width;
+                }
+
                 mbff_groups_.push_back(std::move(g));
             }
         }
@@ -373,29 +410,38 @@ void Banking::run_big(const CompatMaps& maps,
     for (size_t i = 0; i < mbff_groups_.size() && i < (size_t)showN; i++) {
         const auto& g = mbff_groups_[i];
         std::cout << "MBFFGroup ID=" << g.id
-                << " macro=" << g.macro
-                << " size=" << g.bits.size()
-                << " cost=" << g.cost
-                << " @(" << g.place_x << "," << g.place_y << ")\n";
-        for (auto* ff : g.bits) {
-            std::cout << "   - FF " << ff->name
-                    << " macro=" << ff->macro
-                    << " (" << ff->new_x << "," << ff->new_y << ")\n";
-        }
-    }
-}
-void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
-    std::cout << "\n[Final Banking Result]\n";
-    for (const auto& g : mbff_groups_) {
-        if (!pickIDs.empty() && !pickIDs.count(g.id)) continue;
-        std::cout << "MBFFGroup ID=" << g.id
+                  << " inst=" << g.inst_name
                   << " macro=" << g.macro
                   << " size=" << g.bits.size()
+                  << " (" << g.width << "x" << g.height << ")"
+                  << " area=" << g.area
                   << " cost=" << g.cost
                   << " @(" << g.place_x << "," << g.place_y << ")\n";
         for (auto* ff : g.bits) {
             std::cout << "   - FF " << ff->name
                       << " macro=" << ff->macro
+                      << " (" << ff->width << "x" << ff->height << ")"
+                      << " (" << ff->new_x << "," << ff->new_y << ")\n";
+        }
+    }
+}
+
+void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
+    std::cout << "\n[Final Banking Result]\n";
+    for (const auto& g : mbff_groups_) {
+        if (!pickIDs.empty() && !pickIDs.count(g.id)) continue;
+            std::cout << "MBFFGroup ID=" << g.id
+                    << " inst=" << g.inst_name
+                    << " macro=" << g.macro
+                    << " area=" << g.area
+                    << " size=" << g.bits.size()
+                    << " (" << g.width << "x" << g.height << ")"
+                    << " cost=" << g.cost
+                    << " @(" << g.place_x << "," << g.place_y << ")\n";
+        for (auto* ff : g.bits) {
+            std::cout << "   - FF " << ff->name
+                      << " macro=" << ff->macro
+                      << " (" << ff->width << "x" << ff->height << ")"
                       << " (" << ff->new_x << "," << ff->new_y << ")\n";
         }
     }

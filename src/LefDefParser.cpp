@@ -12,7 +12,6 @@
 #include "Logger.h"
 #include "Lef.h"
 #include "Def.h"
-#include "CheckFF.h"
 #include "FFSet.h"
 #include <unordered_map>
 #include <cctype>
