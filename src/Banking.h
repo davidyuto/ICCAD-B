@@ -3,6 +3,7 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include "Cluster.h"
 #include "CompatParser.h"
 #include "LefDefParser.h"
@@ -29,9 +30,10 @@ public:
              double h_cap = 2000.0,
              int forceK = -1,        // 強制指定 K (Auto-K 用)
              bool doBanking = true); // 是否要跑到 Banking
-
+    void debugClusterBanking(const CompatMaps& maps, int limit = 5) const;
     const std::vector<Cluster>&   getClusters() const { return clusters_; }
     const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
+    void printFinalGroups(const std::unordered_set<int>& pickIDs = {}) const;
 
 private:
     double computeCost(const std::string& mbff_macro,

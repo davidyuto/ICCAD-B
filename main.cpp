@@ -139,7 +139,7 @@ int main(int argc, char** argv) {
 
     // === 顯示特定 cell ===
     vector<string> target_cells = {
-        "SNPSHOPT25_FSDN1_V2_0P5", // 1-bit FF
+        "SNPSHOPT25_FSDN_V2_0P5", // 1-bit FF
         "SNPSHOPT25_FSDN2_V2_0P5", // 2-bit MBFF
         "SNPSHOPT25_FSDN4_V2_0P5"  // 4-bit MBFF
     };
@@ -168,6 +168,10 @@ int main(int argc, char** argv) {
     // ============ 正式跑 Banking ============
     my_lefdef::Banking banking(ff_copy, lib);
     banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
+    banking.debugClusterBanking(maps, 5);  // 只印前 5 個 cluster
+    banking.printFinalGroups({0,2,5}); // 只看 MBFFGroup ID=0,2,5
+
+
 
     return 0;
 }

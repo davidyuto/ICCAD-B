@@ -59,6 +59,60 @@ double Banking::computeCost(const std::string& mbff_macro,
     return cost;
 }
 
+void Banking::debugClusterBanking(const CompatMaps& maps, int limit) const {
+    std::cout << "\n[Debug] Show up to " << limit << " clusters banking process with cost breakdown:\n";
+    int shown = 0;
+    for (const auto& c : clusters_) {
+        if (shown++ >= limit) break;
+
+        std::cout << "\nCluster ID=" << c.getID()
+                  << " size=" << c.getFFs().size()
+                  << " center=(" << c.getCenterX()
+                  << "," << c.getCenterY() << ")\n";
+
+        // 列出 FF
+        for (auto* ff : c.getFFs()) {
+            std::cout << "  FF " << ff->name
+                      << " macro=" << ff->macro
+                      << " (" << ff->new_x << "," << ff->new_y << ")\n";
+        }
+
+        // 嘗試 Banking (只展示 2-bit 和 4-bit 組合)
+        auto tryBank = [&](int bits) {
+            if ((int)c.getFFs().size() >= bits) {
+                std::vector<FlipFlop*> sub(c.getFFs().begin(),
+                                           c.getFFs().begin() + bits);
+                std::string mb = pickMBFFMacro(sub, maps);
+                if (!mb.empty()) {
+                    FFPowerArea info = lib_.getFFPowerArea(mb);
+
+                    // 計算 disp
+                    int cx = 0, cy = 0;
+                    for (auto* ff : sub) { cx += ff->new_x; cy += ff->new_y; }
+                    cx /= (int)sub.size(); cy /= (int)sub.size();
+                    double disp = 0.0;
+                    for (auto* ff : sub) {
+                        double dx = ff->new_x - cx;
+                        double dy = ff->new_y - cy;
+                        disp += std::sqrt(dx*dx + dy*dy);
+                    }
+
+                    double cost = disp * 0.5 + info.area + info.power;
+
+                    std::cout << "  Try " << bits << "-bit → " << mb
+                              << "  area=" << info.area
+                              << "  power=" << info.power
+                              << "  disp=" << disp
+                              << "  => cost=" << cost << "\n";
+                }
+            }
+        };
+
+        tryBank(2);
+        tryBank(4);
+    }
+}
+
 
 
 std::string Banking::pickMBFFMacro(const std::vector<FlipFlop*>& bits,
@@ -175,7 +229,7 @@ void Banking::run_big(const CompatMaps& maps,
 
     // === Step 0: 如果 forceK > 0，先用這個 K 重建 bandwidth ===
     if (forceK > 0) {
-        std::cout << "[run_big] Re-clustering with forceK=" << forceK << "\n";
+        // std::cout << "[run_big] Re-clustering with forceK=" << forceK << "\n";
         my_lefdef::FlipFlopClustering cl(ffs_);
         cl.buildRTree();
         cl.initKNN(forceK, 4000*4000);
@@ -200,6 +254,27 @@ void Banking::run_big(const CompatMaps& maps,
 
     std::vector<int> belong(ffs_.size(), -1);
     int cid = 0;
+
+        // === Debug: Clock domains summary ===
+    std::cout << "\n========== Clock Domain Summary ==========\n";
+    for (auto& kv : by_clk) {
+        const std::string& clk = kv.first;
+        const auto& idxs = kv.second;
+        std::cout << "CLK = " << clk
+                  << "  #FFs = " << idxs.size() << "\n";
+        for (int k = 0; k < 5 ; k++) {
+            const FlipFlop& ff = ffs_[idxs[k]];
+            std::cout << "   - " << ff.name
+                      << " (macro=" << ff.macro
+                      << ", x=" << ff.x
+                      << ", y=" << ff.y << ")\n";
+        }
+        if ((int)idxs.size() > 5) {
+            std::cout << "   ... (" << (idxs.size() - 5)
+                      << " more FFs)\n";
+        }
+    }
+    std::cout << "==========================================\n";
 
     // === Step 2: Clustering ===
     for (auto& kv : by_clk) {
@@ -234,8 +309,6 @@ void Banking::run_big(const CompatMaps& maps,
 
     // === Step 3: 如果只要 Clustering，直接返回 ===
     if (!doBanking) {
-        std::cout << "[run_big] Skip banking, only clustering (K="
-                  << (forceK > 0 ? forceK : -1) << ")\n";
         return;
     }
 
@@ -294,7 +367,40 @@ void Banking::run_big(const CompatMaps& maps,
     for (auto& kv : clusterSizeHist) {
         std::cout << " size=" << kv.first << " : " << kv.second << " clusters\n";
     }
+
+    int showN = 3;
+    std::cout << "\n[Debug] Show first " << showN << " MBFF groups:\n";
+    for (size_t i = 0; i < mbff_groups_.size() && i < (size_t)showN; i++) {
+        const auto& g = mbff_groups_[i];
+        std::cout << "MBFFGroup ID=" << g.id
+                << " macro=" << g.macro
+                << " size=" << g.bits.size()
+                << " cost=" << g.cost
+                << " @(" << g.place_x << "," << g.place_y << ")\n";
+        for (auto* ff : g.bits) {
+            std::cout << "   - FF " << ff->name
+                    << " macro=" << ff->macro
+                    << " (" << ff->new_x << "," << ff->new_y << ")\n";
+        }
+    }
 }
+void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
+    std::cout << "\n[Final Banking Result]\n";
+    for (const auto& g : mbff_groups_) {
+        if (!pickIDs.empty() && !pickIDs.count(g.id)) continue;
+        std::cout << "MBFFGroup ID=" << g.id
+                  << " macro=" << g.macro
+                  << " size=" << g.bits.size()
+                  << " cost=" << g.cost
+                  << " @(" << g.place_x << "," << g.place_y << ")\n";
+        for (auto* ff : g.bits) {
+            std::cout << "   - FF " << ff->name
+                      << " macro=" << ff->macro
+                      << " (" << ff->new_x << "," << ff->new_y << ")\n";
+        }
+    }
+}
+
 
 
 } // namespace my_lefdef

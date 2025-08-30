@@ -20,7 +20,6 @@ public:
     void buildRTree();
     void initKNN(int max_neighbors, double max_square_displacement);
     void shiftAllFlipFlops(int max_iterations = 50, double shift_tolerance = 0.1);
-    void printBandwidthStats();
     std::vector<Cluster>& getClusters();
     const std::vector<FlipFlop>& getFFs() const { return ffs_; }
     int countNeighborsWithinRadius(double x, double y, double radius) const {

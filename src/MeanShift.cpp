@@ -11,32 +11,7 @@ namespace my_lefdef {
 
 FlipFlopClustering::FlipFlopClustering(std::vector<FlipFlop>& ffs) : ffs_(ffs) {}
 
-void FlipFlopClustering::printBandwidthStats() {
-    double sum = 0.0, sum2 = 0.0;
-    int cnt = 0;
-    double min_bw = 1e9, max_bw = 0.0;
 
-    for (auto& ff : ffs_) {
-        if (ff.bandwidth > 1e-6) {
-            sum += ff.bandwidth;
-            sum2 += ff.bandwidth * ff.bandwidth;
-            cnt++;
-            if (ff.bandwidth < min_bw) min_bw = ff.bandwidth;
-            if (ff.bandwidth > max_bw) max_bw = ff.bandwidth;
-        }
-    }
-
-    double mean = sum / cnt;
-    double var = (sum2 / cnt) - (mean * mean);
-    double stddev = (var > 0) ? std::sqrt(var) : 0;
-
-    std::cout << "\n[Bandwidth Stats]\n";
-    std::cout << " Count=" << cnt
-              << " Mean=" << mean
-              << " StdDev=" << stddev
-              << " Min=" << min_bw
-              << " Max=" << max_bw << "\n";
-}
 
 void FlipFlopClustering::buildRTree() {
     std::vector<PointWithID> points;
@@ -127,17 +102,6 @@ void FlipFlopClustering::shiftAllFlipFlops(int max_iterations, double shift_tole
         ff.setBandwidth();
         ff.isLegalize = true;
     }
-
-    // 將平移後座標分桶成 cluster（粗略網格）
-    // std::unordered_map<std::pair<int,int>, int, boost::hash<std::pair<int,int>>> cluster_grid;
-    // int cluster_id = 0;
-    // for (auto& ff : ffs_) {
-    //     int gx = ff.new_x / 1000;
-    //     int gy = ff.new_y / 1000;
-    //     std::pair<int,int> key = std::make_pair(gx, gy);
-    //     if (cluster_grid.count(key) == 0) cluster_grid[key] = cluster_id++;
-    //     ff.clusterIdx = cluster_grid[key];
-    // }
 }
 
 double FlipFlopClustering::gaussianKernel(int x1, int y1, int x2, int y2, double bandwidth) const {

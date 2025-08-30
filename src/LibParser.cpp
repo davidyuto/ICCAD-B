@@ -1,4 +1,5 @@
 #include "LibParser.h"
+#include "FFSet.h"
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -46,9 +47,11 @@ void LibParser::stripComments(std::string& s){
 bool LibParser::isFFName(const std::string& cellName){
     auto u = to_upper(cellName);
     // 你說 FSDN 與 LSRD；實務上庫多用 LSRDPQ，所以兩者都支援
-    return (u.find("FSDN") != std::string::npos) ||
-           (u.find("LSRDPQ") != std::string::npos) ||
-           (u.find("LSRD") != std::string::npos);
+    // return (u.find("FSDN") != std::string::npos) ||
+    //        (u.find("LSRDPQ") != std::string::npos) ||
+    //        (u.find("LSRD") != std::string::npos);
+    return single_ff_set().count(cellName) > 0 ||
+           multi_ff_set().count(cellName) > 0;
 }
 
 void LibParser::accumulateValuesFromBlock(const std::string& block, double& sum, size_t& cnt){
