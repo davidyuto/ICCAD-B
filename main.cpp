@@ -91,7 +91,7 @@ int main(int argc, char** argv) {
 
     if (lef_files.empty() || def_files.empty() || lib_files.empty() || v_files.empty()) {
         cerr << "Usage: " << argv[0]
-             << " -lef <lef1> <lef2> ... -def <def1> <def2> ... -lib <lib1> ...\n";
+             << " -lef <lef1> <lef2> ... -def <def1> <def2> ... -lib <lib1> ... -v <vfile> -out <prefix>\n";
         return 1;
     }
 
@@ -110,13 +110,6 @@ int main(int argc, char** argv) {
     cout << "Reading VERILOG file: " << v_files[0] << "\n";
     auto design = vparse::parse_verilog(v_files[0]);
     auto out_v = out_name + ".v";
-
-    // std::ofstream fout(out_v);
-    // vparse::write_design(fout, design, {});   // 或 nullptr / 空的 lambda 都行
-    // std::cout << "Wrote " << out_v << endl;
-
-    // return 0;
-
 
     // === 讀取 .lib ===
     LibParser lib;
@@ -155,7 +148,7 @@ int main(int argc, char** argv) {
 
     // === 顯示特定 cell ===
     vector<string> target_cells = {
-        "SNPSHOPT25_FSDN_V2_0P5", // 1-bit FF
+        "SNPSHOPT25_FSDN_V2_0P5",  // 1-bit FF
         "SNPSHOPT25_FSDN2_V2_0P5", // 2-bit MBFF
         "SNPSHOPT25_FSDN4_V2_0P5"  // 4-bit MBFF
     };
@@ -184,11 +177,12 @@ int main(int argc, char** argv) {
     // ============ 正式跑 Banking ============
     my_lefdef::Banking banking(ff_copy, lib);
     banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
-    const auto& groups = banking.getMBFFGroups();
+    const auto& groups = banking.getMBFFs();
+
 
     // ============ 處理 .v檔 ============
     std::vector<SimpleGroup> sgroups;
-    for (const auto& g : banking.getMBFFGroups()){
+    for (const auto& g : groups) {
         SimpleGroup sg;
         sg.new_inst    = g.inst_name;
         sg.mbff_master = g.macro;
@@ -197,11 +191,10 @@ int main(int argc, char** argv) {
     }
     write_banked_two_types(design, sgroups, out_v);
     std::cout << "Wrote " << out_v << "\n";
-    
-    //banking.debugClusterBanking(maps, 5);  // 只印前 5 個 cluster
-    //banking.printFinalGroups({0,2,5}); // 只看 MBFFGroup ID=0,2,5
 
-
+    // ============ 輸出 .list ============
+    auto out_list = out_name + ".list";
+    banking.writeListFile(out_list, design);
 
     return 0;
 }

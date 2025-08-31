@@ -8,7 +8,9 @@
 #include "CompatParser.h"
 #include "LefDefParser.h"
 #include "MeanShift.h"
+#include "Banking.h"
 #include "LibParser.h"
+#include "VerilogParser.h"
 
 namespace my_lefdef {
 
@@ -38,11 +40,15 @@ public:
     const std::vector<Cluster>&   getClusters() const { return clusters_; }
     const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
     void printFinalGroups(const std::unordered_set<int>& pickIDs = {}) const;
-    const std::vector<MBFFGroup>& getMBFFGroups() const;
+    // void writeListFile(const std::string& filename) const;
+    void writeListFile(const std::string& filename,
+                   const vparse::VerilogDesign& design) const;
+
 
 private:
     double computeCost(const std::string& mbff_macro,
                        const std::vector<FlipFlop*>& bits) const;
+
 
     std::string pickMBFFMacro(const std::vector<FlipFlop*>& bits,
                               const CompatMaps& maps) const;
@@ -52,10 +58,10 @@ private:
 private:
     std::vector<FlipFlop>& ffs_;
     const LibParser& lib_;
-
+    std::vector<std::string> operation_log_;
     std::vector<Cluster> clusters_;
     std::vector<MBFFGroup> mbff_groups_;
     
 };
-
+extern std::vector<MBFFGroup> last_banking_result;
 } // namespace my_lefdef

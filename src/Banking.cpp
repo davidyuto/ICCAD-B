@@ -7,6 +7,7 @@
 #include <algorithm>
 
 namespace my_lefdef {
+std::vector<MBFFGroup> last_banking_result;
 
 inline double Banking::dist2_new(const FlipFlop& a, const FlipFlop& b) {
     double dx = double(a.new_x) - double(b.new_x);
@@ -387,6 +388,28 @@ void Banking::run_big(const CompatMaps& maps,
                 mbff_groups_.push_back(std::move(g));
             }
         }
+        else if (n == 1) {
+            std::vector<FlipFlop*> sub(bits.end()-1, bits.end());
+            FlipFlop* ff = sub[0];
+
+            MBFFGroup g;
+            g.id      = gid++;
+            g.macro   = ff->macro;          // 單顆就直接用原本 macro
+            g.bits    = sub;
+            g.place_x = ff->new_x;
+            g.place_y = ff->new_y;
+            g.cost    = lib_.getFFPowerArea(ff->macro).area +
+                        lib_.getFFPowerArea(ff->macro).power;
+
+            g.inst_name = ff->name;         // 保留原本 instance 名
+
+            auto info = lib_.getFFPowerArea(ff->macro);
+            g.area = info.area;
+            g.width  = ff->width;
+            g.height = ff->height;
+
+            mbff_groups_.push_back(std::move(g));
+        }
     }
 
     // === Step 5: Debug 輸出 ===
@@ -424,6 +447,7 @@ void Banking::run_big(const CompatMaps& maps,
                       << " (" << ff->new_x << "," << ff->new_y << ")\n";
         }
     }
+    last_banking_result = mbff_groups_;
 }
 
 void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
@@ -447,8 +471,68 @@ void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
     }
 }
 
-const std::vector<MBFFGroup>& Banking::getMBFFGroups() const {
-    return mbff_groups_;
+
+
+void Banking::writeListFile(const std::string& filename,
+                            const vparse::VerilogDesign& design) const {
+    std::ofstream fout(filename);
+    if (!fout) {
+        std::cerr << "[Error] Cannot open " << filename << " for writing.\n";
+        return;
+    }
+
+    // ================= Part 1: Pin Mapping =================
+    fout << "CellInst " << mbff_groups_.size() << "\n";
+
+    for (const auto& g : mbff_groups_) {
+        for (size_t i = 0; i < g.bits.size(); i++) {
+            auto* ff = g.bits[i];
+
+            // 找回原始的 FF instance（由 inst_name 對應）
+            const vparse::FFInstance* ffi = nullptr;
+            for (const auto& mod : design.modules) {
+                for (const auto& inst : mod.ff_instances) {
+                    if (inst.inst_name == ff->name) {
+                        ffi = &inst;
+                        break;
+                    }
+                }
+                if (ffi) break;
+            }
+            if (!ffi) continue;
+
+            // 對來源 FF 的每個 pin 做 mapping
+            for (auto& [pin, net] : ffi->pin2net) {
+                std::string tgt_pin;
+
+                if (pin == "D")      tgt_pin = "D"  + std::to_string(i);
+                else if (pin == "Q") tgt_pin = "Q"  + std::to_string(i);
+                else if (pin == "QN") tgt_pin = "QN" + std::to_string(i);
+                else if (pin == "CK" || pin == "CLK") tgt_pin = "CK";
+                else if (pin == "SE" || pin == "SI" || pin == "RESET" || pin == "SET")
+                    tgt_pin = pin; // 控制腳直接照名字 map
+                else
+                    continue; // 其他暫時略過
+
+                fout << ff->name << "/" << pin
+                     << " map " << g.inst_name << "/" << tgt_pin << "\n";
+            }
+        }
+    }
+    fout << "\n";
+
+    // ================= Part 2: Operation Log =================
+    fout << "OPERATION " << mbff_groups_.size() << "\n";
+    for (const auto& g : mbff_groups_) {
+        fout << "create_multibit { ";
+        for (auto* ff : g.bits) {
+            fout << "{" << ff->name << " " << ff->macro << " 1} ";
+        }
+        fout << "{" << g.inst_name << " " << g.macro << " " << g.bits.size() << "} }\n";
+    }
+
+    fout.close();
+    std::cout << "[Output] Wrote list file: " << filename << "\n";
 }
 
 } // namespace my_lefdef

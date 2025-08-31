@@ -77,7 +77,6 @@
         "xtree": "cpp",
         "xutility": "cpp",
         "array": "cpp",
-        "regex": "cpp",
-        "xmemory0": "cpp"
+        "regex": "cpp"
     }
 }
