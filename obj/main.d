@@ -23,8 +23,10 @@ obj/main.o: main.cpp parser/util/Logger.h parser/util/Watch.h \
  parser/include/def/defiPartition.hpp parser/include/def/defiPinProp.hpp \
  parser/include/def/defiBlockage.hpp parser/include/def/defiSlot.hpp \
  parser/include/def/defiFill.hpp parser/include/def/defiNonDefault.hpp \
- parser/include/def/defiPropType.hpp src/MeanShift.h src/LefDefParser.h \
- src/Cluster.h src/Cluster.h src/PlacementStructure.h src/CompatParser.h
+ parser/include/def/defiPropType.hpp src/VerilogParser.h src/CheckFF.h \
+ src/MeanShift.h src/LefDefParser.h src/Cluster.h src/Cluster.h \
+ src/Banking.h src/CompatParser.h src/LibParser.h \
+ src/PlacementStructure.h
 parser/util/Logger.h:
 parser/util/Watch.h:
 parser/util/ArgParser.h:
@@ -78,9 +80,13 @@ parser/include/def/defiSlot.hpp:
 parser/include/def/defiFill.hpp:
 parser/include/def/defiNonDefault.hpp:
 parser/include/def/defiPropType.hpp:
+src/VerilogParser.h:
+src/CheckFF.h:
 src/MeanShift.h:
 src/LefDefParser.h:
 src/Cluster.h:
 src/Cluster.h:
-src/PlacementStructure.h:
+src/Banking.h:
 src/CompatParser.h:
+src/LibParser.h:
+src/PlacementStructure.h:

@@ -12,7 +12,7 @@
 #include "Logger.h"
 #include "Lef.h"
 #include "Def.h"
-
+#include "FFSet.h"
 #include <unordered_map>
 #include <cctype>
 #include <cassert>
@@ -33,53 +33,15 @@ constexpr double SHIFT_TOLERANCE = 1e-2;
 namespace my_lefdef
 {
 
-//------------------------------------------------------------------------------
-// Static helper functions for FF classification
-//------------------------------------------------------------------------------
-
-
-bool is_main_Q_pin(const std::string& name) {
-
-    if (name.size() >= 2 && name[0] == 'Q' && std::isdigit(name[1])) {
-        cout << "Q-pin name: " << name << endl;
-        return true;
-    }
-        
-    else if (name == "Q")
-        return true;
-    else return false;
+// 修改點：原本是用 pin 判斷，改成集合判斷
+bool LefDefParser::isSingleBitMacro(const lef::MacroPtr &m) {
+    return single_ff_set().count(m->name_) > 0;
 }
-
-int LefDefParser::countQpins(const lef::MacroPtr &m) {
-    int cnt = 0;
-    for (const auto& kv : m->pin_umap_) {
-        const auto& pin_name = kv.first;
-        // cout << "PIN's name:" << pin_name << endl;
-        const auto& pin = kv.second;
-
-        if (pin->dir_ != PinDir::output) continue;
-
-        if (is_main_Q_pin(pin_name)) {
-            ++cnt;
-        }
-    }
-    return cnt;
-}
-
-
-
 
 bool LefDefParser::isMultiBitMacro(const lef::MacroPtr &m) {
-    return countQpins(m) > 1;
+    return multi_ff_set().count(m->name_) > 0;
 }
 
-bool LefDefParser::isSingleBitMacro(const lef::MacroPtr &m) {
-    if (isMultiBitMacro(m)) return false;
-    bool hasQ   = (countQpins(m) == 1);
-    bool hasD   = (m->pin_umap_.count("D") > 0);
-    bool hasCK  = (m->pin_umap_.count("CLK") > 0) || (m->pin_umap_.count("CK") > 0);
-    return hasQ && hasD && hasCK;
-}
 
 std::string LefDefParser::extractGroupName(const std::string &compName) {
     auto pos = compName.find_last_of('_');
@@ -125,7 +87,8 @@ void LefDefParser::extractFlipFlops() {
         auto comp = kv.second;
         auto macro = comp->lef_macro_;
         if (!macro) continue;
-        // Classify macro
+
+        // 判斷 Macro 屬性
         if (isMultiBitMacro(macro)) {
             auto group = extractGroupName(comp->name_);
             auto &mb = tmp[group];
@@ -134,15 +97,20 @@ void LefDefParser::extractFlipFlops() {
         }
         else if (isSingleBitMacro(macro)) {
             ffs_.push_back({
-            comp->name_,
-            comp->x_,
-            comp->y_,
-            macro->name_,
-            macro->size_x_,
-            macro->size_y_
+                comp->name_,
+                comp->x_,
+                comp->y_,
+                macro->name_,
+                macro->size_x_,
+                macro->size_y_
             });
+            // std::cout << "Found single-bit FF: " << comp->name_ << " of macro " << macro->name_ << std::endl;
         }
+        // else {
+        //     std::cout << "Non-FF macro: " << macro->name_ << std::endl;
+        // }
     }
+
 
     
     mbffs_.reserve(tmp.size());

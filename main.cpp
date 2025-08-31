@@ -1,18 +1,82 @@
+/**
+ * @file    main.cpp
+ * @brief   Main entry with Auto-K selection + Banking
+ */
+
 #include "Logger.h"
 #include "Watch.h"
 #include "ArgParser.h"
 #include "LefDefParser.h"
+#include "VerilogParser.h"
 #include "MeanShift.h"
 #include "Cluster.h"
+#include "Banking.h"
 #include "PlacementStructure.h"
 #include "CompatParser.h"
+#include "LibParser.h"
+
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <algorithm>
-#define MAX_NEIGHBORS 5
+#include <cmath>
+#include <climits>
+
 using namespace std;
+
+// === Auto-K 選擇函式 ===
+int chooseBestK(const std::vector<int>& Ks,
+                std::vector<my_lefdef::FlipFlop>& ffs,
+                const CompatMaps& maps,
+                const LibParser& lib) {
+    int bestK = Ks[0];
+    double bestScore = 1e18;
+
+    for (int K : Ks) {
+        std::cout << "\n[Auto-K] Testing K=" << K << "\n";
+
+        std::vector<my_lefdef::FlipFlop> ffs_copy = ffs;
+        my_lefdef::Banking banking(ffs_copy, lib);
+
+        // 🚩 只做 Clustering，不跑 Banking
+        banking.run_big(maps, 1.5, 2500.0, 2000.0, K, false);
+
+        auto& clusters = banking.getClusters();
+        int totalCluster = clusters.size();
+
+        std::unordered_map<int,int> hist;
+        for (auto& c : clusters) hist[(int)c.getFFs().size()]++;
+
+        int single = hist[1];
+        int large=0, medium=0;
+        for (auto& kv : hist) {
+            if (kv.first >= 12) large += kv.second;
+            if (kv.first >= 2 && kv.first <= 8) medium += kv.second;
+        }
+
+        double p1     = (totalCluster>0)? (double)single / totalCluster * 100.0 : 0;
+        double pLarge = (totalCluster>0)? (double)large  / totalCluster * 100.0 : 0;
+        double pMed   = (totalCluster>0)? (double)medium / totalCluster * 100.0 : 0;
+
+        std::cout << " - 1-bit clusters   = " << single << " (" << p1 << "%)\n";
+        std::cout << " - 2~8-bit clusters = " << medium << " (" << pMed << "%)\n";
+        std::cout << " - >=12-bit clusters= " << large  << " (" << pLarge << "%)\n";
+        std::cout << " - Total clusters   = " << totalCluster << "\n";
+
+        double score = p1*0.5 + (100-pMed)*0.3 + pLarge*1.0;
+        std::cout << " - Score = " << score << "\n";
+
+        if (score < bestScore) {
+            bestScore = score;
+            bestK = K;
+        }
+    }
+
+    std::cout << "\n[Auto-K] >>> Chosen K = " << bestK << " <<<\n";
+    return bestK;
+}
 
 int main(int argc, char** argv) {
     auto& ap = ArgParser::get();
@@ -20,10 +84,13 @@ int main(int argc, char** argv) {
 
     auto lef_files = ap.get_multiple_arguments("-lef");
     auto def_files = ap.get_multiple_arguments("-def");
+    auto lib_files = ap.get_multiple_arguments("-lib");
+    auto v_files = ap.get_multiple_arguments("-v");
+    auto out_name = ap.get_argument("-out");
 
-    if (lef_files.empty() || def_files.empty()) {
+    if (lef_files.empty() || def_files.empty() || lib_files.empty() || v_files.empty()) {
         cerr << "Usage: " << argv[0]
-             << " -lef <lef1> <lef2> ... -def <def1> <def2> ...\n";
+             << " -lef <lef1> <lef2> ... -def <def1> <def2> ... -lib <lib1> ...\n";
         return 1;
     }
 
@@ -33,190 +100,94 @@ int main(int argc, char** argv) {
         cout << "Reading LEF file: " << lf << "\n";
         ldp.read_lef(lf);
     }
-
     for (const auto& def : def_files) {
         cout << "Reading DEF file: " << def << "\n";
         ldp.read_def(def);
     }
 
+    // === 讀取 .v ===
+    for (const auto& v_file : v_files) {
+        cout << "Reading VERILOG file: " << v_file << "\n";
+        vparse::VerilogDesign design = vparse::parse_verilog(v_file);
+
+        auto out_v = out_name + ".v";
+        std::ofstream fout(out_v);
+        vparse::write_design(fout, design, {});   // 或 nullptr / 空的 lambda 都行
+        std::cout << "Wrote " << out_v << endl;
+
+        return 0;
+    }
+
+    // === 讀取 .lib ===
+    LibParser lib;
+    for (const auto& libfile : lib_files) {
+        cout << "Reading LIB file: " << libfile << "\n";
+        if (!lib.loadLib(libfile)) {
+            cerr << "[Error] Failed to load " << libfile << "\n";
+            return 1;
+        }
+    }
+
     ldp.fillFlipFlopNets();
     cout << "\nParsing complete.\n";
 
-    auto rows = extractRowInfos();
-    // cout << "Total physical rows: " << rows.size() << "\n";
-    // for (size_t i = 0; i < min(rows.size(), size_t(10)); ++i) {
-    //     auto &r = rows[i];
-    //     cout << "Row@Y="    << r.y
-    //          << " origX="   << r.orig_x
-    //          << " count="   << r.num_sites
-    //          << " pitch="   << r.site_step
-    //          << "\n";
-    // }
-
-    
-    const auto& ffs = ldp.getFFs();
+    // ============ Summary ============
+    const auto& ffs   = ldp.getFFs();
     const auto& mbffs = ldp.getMBFFs();
-    const auto& comps = ldp.get_def().get_component_umap();
     size_t mbff_bits_total = 0;
     for (const auto& mb : mbffs) mbff_bits_total += mb.bits.size();
 
     cout << "\n========== FF Classification Summary ==========\n";
-    cout << "\nSummary of FF classification:\n";
     cout << "  Single-bit FF count : " << ffs.size() << "\n";
     cout << "  Multi-bit FF groups : " << mbffs.size() << "\n";
-    cout << "Total MBFF instances    : " << mbff_bits_total << "\n";
+    cout << "  Total MBFF instances: " << mbff_bits_total << "\n";
     cout << "================================================\n";
-    // 印出前 10 個 FF
-    cout << "\n[Sample] First up to 10 FFs:\n";
-    for (size_t i = 0; i < std::min<size_t>(ffs.size(), 10); ++i) {
-        const auto& ff = ffs[i];
-        auto it = comps.find(ff.name);
-        std::string macro = (it != comps.end() && it->second->lef_macro_) 
-            ? it->second->lef_macro_->name_ : "UNKNOWN";
-        cout << "  " << ff.name << " @ (" << ff.x << "," << ff.y << ")"
-            << "   [Macro: " << macro << "]\n";
+
+    // === Debug: 顯示前 10 個 FF cell 資訊 ===
+    cout << "\n[Debug] First 10 FF cells from .lib:\n";
+    int cnt = 0;
+    for (auto& kv : lib.table()) {
+        cout << "  " << kv.first
+             << "  area=" << kv.second.area
+             << "  power=" << kv.second.power << "\n";
+        if (++cnt >= 10) break;
     }
 
-
-    std::cout << "\n[Check] First 5 FFs with Size:\n";
-    for (int i = 0; i < std::min((int)ffs.size(), 5); ++i) {
-        const auto& ff = ffs[i];
-        std::cout << "  " << ff.name 
-                << " @ (" << ff.x << ", " << ff.y << ")"
-                << " | Macro: " << ff.macro
-                << " | Size: " << ff.width << " x " << ff.height << "\n";
+    // === 顯示特定 cell ===
+    vector<string> target_cells = {
+        "SNPSHOPT25_FSDN_V2_0P5", // 1-bit FF
+        "SNPSHOPT25_FSDN2_V2_0P5", // 2-bit MBFF
+        "SNPSHOPT25_FSDN4_V2_0P5"  // 4-bit MBFF
+    };
+    cout << "\n[Debug] Selected cells:\n";
+    for (const auto& name : target_cells) {
+        auto info = lib.getFFPowerArea(name);
+        cout << "  " << name
+             << "  area=" << info.area
+             << "  power=" << info.power << "\n";
     }
 
-    //     =======================================
-    // 印出前 10 條 Net 及其詳細 Connection 資訊（含 bbox / pin / instance）
-    // // =======================================
-    // const auto& nets = ldp.get_def().get_net_umap();
-
-    // std::cout << "\n========== Sample DEF Netlist (up to 10) ==========\n";
-    // int net_count = 0;
-    // for (const auto& [net_name, net_ptr] : nets) {
-    //     std::cout << net_name << "[" << net_ptr->connections_.size() << "]\n";
-    //     for (const auto& conn : net_ptr->connections_) {
-    //         std::cout << "  " << *conn << "\n";  // 使用你原本的 operator<< (Connection)
-    //     }
-    //     if (++net_count >= 10) break;
-    // }
-
-    // auto netlist = ldp.extractNetlist();
-
-    // std::cout << "\n[Check] Sample InternalNetlist (up to 5 nets):\n";
-    // int shown = 0;
-    // for (const auto& [net_name, net] : netlist.nets) {
-    //     std::cout << "Net: " << net_name << "\n";
-    //     for (const auto& conn : net.connections) {
-    //         std::cout << "  Instance: " << conn.instance
-    //                 << ", Pin: " << conn.pin << "\n";
-    //     }
-    //     if (++shown >= 5) break;
-    // }
-    std::cout << "\n[Check] First 3 FFs with Net Connections:\n";
-    for (int i = 0; i < std::min(3, (int)ldp.getFFs().size()); ++i) {
-        const auto& ff = ldp.getFFs()[i];
-        std::cout << "  " << ff.name 
-              << " | D: "   << (ff.fanin_net.empty() ? "None" : ff.fanin_net)
-              << ", Q: "    << (ff.fanout_net.empty() ? "None" : ff.fanout_net)
-              << ", CLK: "  << (ff.clk_net.empty() ? "None" : ff.clk_net)
-              << "\n";
-    }
-
-
-    std::vector<my_lefdef::FlipFlop> ff_copy = ffs;
-    my_lefdef::FlipFlopClustering clustering(ff_copy);
-
-    // ==== Step 1: 簡單統計 FF 平均密度 ====
-    double estimate_radius = 4000.0;  
-    int sample_count = 100;        
-    int total_neighbors = 0;
-
-    clustering.buildRTree();  
-
-    for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
-        const auto& ff = ff_copy[i];
-        int count = clustering.countNeighborsWithinRadius(ff.x, ff.y, estimate_radius);
-        total_neighbors += count;
-    }
-
-    double avg_density = (double)total_neighbors / sample_count;
-    int adaptive_K = std::clamp((int)(avg_density * 0.5), 5, 30);  
-    double adaptive_radius = estimate_radius * 1.5;  
-    double max_square_displacement = adaptive_radius * adaptive_radius;
-
-
-
-    clustering.initKNN(40, 4000000);
-
-
-    std::cout << "\n[Check] R-tree KNN Results for first 3 FFs:\n";
-    for (int i = 0; i < std::min(20, (int)ff_copy.size()); ++i) {
-        const auto& ff = ff_copy[i];
-        std::cout << "  [FF] " << ff.name << " @ (" << ff.x << ", " << ff.y << ") has neighbors:\n";
-        if (ff.neighbors.empty()) {
-            std::cout << "    No neighbors found.\n";
-            continue;
-        }
-        for (const auto& [nid, dist2] : ff.neighbors) {
-            const auto& neighbor = ff_copy[nid];
-            std::cout << "    -> " << neighbor.name 
-                    << " @ (" << neighbor.x << ", " << neighbor.y << ")"
-                    << " | distance = " << std::sqrt(dist2) << "\n";
-        }
-        std::cout << "  Bandwidth (h_i) = " << ff.bandwidth << "\n";
-    }
-
-    clustering.shiftAllFlipFlops(); 
-
-    // for (int i = 0; i < std::min((int)ff_copy.size(), sample_count); ++i) {
-    //     const auto& ff = ff_copy[i];
-    //     std::cout << "FF[" << i << "]: "
-    //             << "Old = (" << ff.x << ", " << ff.y << "), "
-    //             << "New = (" << ff.new_x << ", " << ff.new_y << ")"
-    //             << std::endl;
-    // }
-
-    // for (const auto& cluster : clusters) {
-    //     std::cout << "Cluster #" << cluster.getID()
-    //               << " with " << cluster.getFFs().size() << " FFs at center ("
-    //               << cluster.getCenterX() << ", " << cluster.getCenterY() << ")\n";
-    //     for (const auto* ff : cluster.getFFs()) {
-    //         std::cout << "   - " << ff->name << " (" << ff->x << ", " << ff->y << ")\n";
-    //     }
-    // }   
-
-
-    // std::cout << "\n[Auto-Tune] Estimated avg_density = " << avg_density
-    //         << ", adaptive_K = " << adaptive_K
-    //         << ", radius = " << adaptive_radius << "\n";
+    // ============ Load Compat ============
     CompatMaps maps;
-    // 將兩份檔案都讀進來（順序不限）
-    bool ok1 = CompatParser::load("../testcase/banking_compatible.rpt.txt", maps);
-    bool ok2 = CompatParser::load("../testcase/debanking_compatible.rpt.txt", maps);
+    bool ok1 = CompatParser::load("testcase3/banking_compatible.rpt.txt", maps);
+    bool ok2 = CompatParser::load("testcase3/debanking_compatible.rpt.txt", maps);
     std::cout << "[banking open] " << ok1
-            << "  [debanking open] " << ok2 << "\n";
+              << "  [debanking open] " << ok2 << "\n";
     std::cout << "single2multi size=" << maps.single2multi.size()
-            << "  multi2single size=" << maps.multi2single.size() << "\n";
+              << "  multi2single size=" << maps.multi2single.size() << "\n";
 
-    // 查 banking: 單 bit → 多 bit 候選
-    auto &cands = CompatParser::single_to_multi(maps, "SNPSHOPT25_FSDN_V2_1");
-    std::cout << "Single SNPSHOPT25_FSDN_V2_1 compatible MBFF:\n";
-    for (auto &s : cands) std::cout << "  - " << s << "\n";
+    // ============ Auto-K 選擇 ============
+    std::vector<my_lefdef::FlipFlop> ff_copy = ffs;
+    std::vector<int> candidateKs = {10,12,15,18,20};
+    int bestK = chooseBestK(candidateKs, ff_copy, maps, lib);
 
-    // 查 debanking: 多 bit → 單 bit 候選
-    auto &cands2 = CompatParser::multi_to_single(maps, "SNPSHOPT25_FSDN4_V2_1");
-    std::cout << "Multi SNPSHOPT25_FSDN4_V2_1 compatible single-bit:\n";
-    for (auto &s : cands2) std::cout << "  - " << s << "\n";
-    std::cout << "\n[Check] First 3 FFs with Net Connections:\n";
-    for (int i = 0; i < std::min(3, (int)ldp.getFFs().size()); ++i) {
-        const auto& ff = ldp.getFFs()[i];
-        std::cout << "  " << ff.name 
-              << " | D: "   << (ff.fanin_net.empty() ? "None" : ff.fanin_net)
-              << ", Q: "    << (ff.fanout_net.empty() ? "None" : ff.fanout_net)
-              << ", CLK: "  << (ff.clk_net.empty() ? "None" : ff.clk_net)
-              << "\n";
-    }
+    // ============ 正式跑 Banking ============
+    my_lefdef::Banking banking(ff_copy, lib);
+    banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
+    banking.debugClusterBanking(maps, 5);  // 只印前 5 個 cluster
+    banking.printFinalGroups({0,2,5}); // 只看 MBFFGroup ID=0,2,5
 
+
+
+    return 0;
 }

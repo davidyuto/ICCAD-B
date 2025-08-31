@@ -24,7 +24,7 @@ obj/LefDefParser.o: src/LefDefParser.cpp src/LefDefParser.h \
  parser/include/def/defiBlockage.hpp parser/include/def/defiSlot.hpp \
  parser/include/def/defiFill.hpp parser/include/def/defiNonDefault.hpp \
  parser/include/def/defiPropType.hpp parser/util/StringUtil.h \
- parser/util/Watch.h parser/util/Logger.h
+ parser/util/Watch.h parser/util/Logger.h src/FFSet.h
 src/LefDefParser.h:
 parser/common/common_header.h:
 src/Lef.h:
@@ -78,3 +78,4 @@ parser/include/def/defiPropType.hpp:
 parser/util/StringUtil.h:
 parser/util/Watch.h:
 parser/util/Logger.h:
+src/FFSet.h:

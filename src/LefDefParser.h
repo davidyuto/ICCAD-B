@@ -54,22 +54,20 @@ struct FlipFlop {
                       return a.second < b.second;
                   });
     }
-    void setBandwidth(double alpha = 1.5, double h_max = 1500.0) {
+    void setBandwidth(int M = 14, double alpha = 1.5, double h_max = 2500.0) {
         if (neighbors.empty()) {
-            bandwidth = 0.0;
+            bandwidth = 300.0; // 最低保護
             return;
         }
-
-        int M = std::min(14, static_cast<int>(neighbors.size() - 1));  // M-th neighbor (15th)
+        M = std::min(M, (int)neighbors.size()-1);
         double dist2 = neighbors[M].second;
         double dist = std::sqrt(dist2);
 
         double bw = std::min(h_max, alpha * dist);
-        if (bw < 300.0) bw = 300.0;
-
+        if (bw < 300.0) bw = 300.0;   // 避免孤立
         bandwidth = bw;
-        
     }
+
 // void setBandwidth(double dist_to_Mth, double criticality = 0.0, double h_max = 1500.0) {
 //     criticality = std::max(0.0, std::min(1.0, criticality));  // 限制在 [0, 1]
 //     double alpha = 1.5 * (1.0 - 0.8 * criticality);            // 保證 α ≥ 0.3

@@ -23,7 +23,10 @@ public:
     void setID(int id) { this->id = id; }
     int getID() const { return id; }
 
-    void addFF(FlipFlop* ff) { FFs.push_back(ff); }
+    void addFF(FlipFlop* ff) { 
+        FFs.push_back(ff); 
+        ff->clusterIdx = id;
+    }
     const std::vector<FlipFlop*>& getFFs() const { return FFs; }
 
     void computeCenter() {
