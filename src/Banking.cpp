@@ -447,6 +447,8 @@ void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
     }
 }
 
-
+const std::vector<MBFFGroup>& Banking::getMBFFGroups() const {
+    return mbff_groups_;
+}
 
 } // namespace my_lefdef

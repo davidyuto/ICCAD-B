@@ -38,6 +38,7 @@ public:
     const std::vector<Cluster>&   getClusters() const { return clusters_; }
     const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
     void printFinalGroups(const std::unordered_set<int>& pickIDs = {}) const;
+    const std::vector<MBFFGroup>& getMBFFGroups() const;
 
 private:
     double computeCost(const std::string& mbff_macro,

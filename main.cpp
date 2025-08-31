@@ -14,6 +14,7 @@
 #include "PlacementStructure.h"
 #include "CompatParser.h"
 #include "LibParser.h"
+#include "EmitMBFF.h"
 
 #include <iostream>
 #include <sstream>
@@ -106,17 +107,16 @@ int main(int argc, char** argv) {
     }
 
     // === 讀取 .v ===
-    for (const auto& v_file : v_files) {
-        cout << "Reading VERILOG file: " << v_file << "\n";
-        vparse::VerilogDesign design = vparse::parse_verilog(v_file);
+    cout << "Reading VERILOG file: " << v_files[0] << "\n";
+    auto design = vparse::parse_verilog(v_files[0]);
+    auto out_v = out_name + ".v";
 
-        auto out_v = out_name + ".v";
-        std::ofstream fout(out_v);
-        vparse::write_design(fout, design, {});   // 或 nullptr / 空的 lambda 都行
-        std::cout << "Wrote " << out_v << endl;
+    // std::ofstream fout(out_v);
+    // vparse::write_design(fout, design, {});   // 或 nullptr / 空的 lambda 都行
+    // std::cout << "Wrote " << out_v << endl;
 
-        return 0;
-    }
+    // return 0;
+
 
     // === 讀取 .lib ===
     LibParser lib;
@@ -184,8 +184,22 @@ int main(int argc, char** argv) {
     // ============ 正式跑 Banking ============
     my_lefdef::Banking banking(ff_copy, lib);
     banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
-    banking.debugClusterBanking(maps, 5);  // 只印前 5 個 cluster
-    banking.printFinalGroups({0,2,5}); // 只看 MBFFGroup ID=0,2,5
+    const auto& groups = banking.getMBFFGroups();
+
+    // ============ 處理 .v檔 ============
+    std::vector<SimpleGroup> sgroups;
+    for (const auto& g : banking.getMBFFGroups()){
+        SimpleGroup sg;
+        sg.new_inst    = g.inst_name;
+        sg.mbff_master = g.macro;
+        for (auto* ff : g.bits) sg.members.push_back(ff->name);
+        sgroups.push_back(std::move(sg));
+    }
+    write_banked_two_types(design, sgroups, out_v);
+    std::cout << "Wrote " << out_v << "\n";
+    
+    //banking.debugClusterBanking(maps, 5);  // 只印前 5 個 cluster
+    //banking.printFinalGroups({0,2,5}); // 只看 MBFFGroup ID=0,2,5
 
 
 

@@ -346,15 +346,30 @@ void write_module(std::ostream& os,
                   const VerilogModule& mod,
                   const std::function<std::string(const FFInstance&)>& emitFF)
 {
+    auto ends_nl = [](const std::string& s){
+        return !s.empty() && s.back() == '\n';
+    };
+
+    bool last_ended_nl = true; // 假設一開始在新行
+
     for (const auto& c : mod.chunks) {
         if (c.kind == VerilogModule::Chunk::Raw) {
             os << c.text;
+            last_ended_nl = ends_nl(c.text);   // 完全不改 Raw 的換行行為
         } else {
             const auto& ffi = mod.ff_instances[c.ff_id];
-            std::string repl;
-            if (emitFF) repl = emitFF(ffi);
-            if (repl.empty()) repl = ffi.original_text; // 退回原文
+            std::string tmp = emitFF ? emitFF(ffi) : std::string();
+            bool replaced = !tmp.empty();      // 有回字串 => 你打算替換/刪除
+            std::string repl = replaced ? tmp : ffi.original_text;
+
+            // 只在「有替換且上一段沒換行且這次不是純刪除」時，補一個換行
+            if (replaced && repl != "\n" && !last_ended_nl) {
+                os << '\n';
+                last_ended_nl = true;
+            }
+
             os << repl;
+            last_ended_nl = ends_nl(repl);
         }
     }
 }
