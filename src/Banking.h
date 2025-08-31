@@ -10,6 +10,7 @@
 #include "MeanShift.h"
 #include "Banking.h"
 #include "LibParser.h"
+#include "VerilogParser.h"
 
 namespace my_lefdef {
 
@@ -39,7 +40,10 @@ public:
     const std::vector<Cluster>&   getClusters() const { return clusters_; }
     const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
     void printFinalGroups(const std::unordered_set<int>& pickIDs = {}) const;
-    void writeListFile(const std::string& filename) const;
+    // void writeListFile(const std::string& filename) const;
+    void writeListFile(const std::string& filename,
+                   const vparse::VerilogDesign& design) const;
+
 
 private:
     double computeCost(const std::string& mbff_macro,

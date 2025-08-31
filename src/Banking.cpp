@@ -471,7 +471,10 @@ void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
     }
 }
 
-void Banking::writeListFile(const std::string& filename) const {
+
+
+void Banking::writeListFile(const std::string& filename,
+                            const vparse::VerilogDesign& design) const {
     std::ofstream fout(filename);
     if (!fout) {
         std::cerr << "[Error] Cannot open " << filename << " for writing.\n";
@@ -479,36 +482,57 @@ void Banking::writeListFile(const std::string& filename) const {
     }
 
     // ================= Part 1: Pin Mapping =================
-    // CellInst 行數 = 最終的 sequential instance 數量
     fout << "CellInst " << mbff_groups_.size() << "\n";
 
     for (const auto& g : mbff_groups_) {
-        // Pin mapping：每個 FF 的 D/Q/CLK 對應到新 MBFF 的 Dk/Qk/CLK
         for (size_t i = 0; i < g.bits.size(); i++) {
             auto* ff = g.bits[i];
-            fout << ff->name << "/D map " << g.inst_name << "/D" << i << "\n";
-            fout << ff->name << "/Q map " << g.inst_name << "/Q" << i << "\n";
-            fout << ff->name << "/CK map " << g.inst_name << "/CLK\n";
+
+            // 找回原始的 FF instance（由 inst_name 對應）
+            const vparse::FFInstance* ffi = nullptr;
+            for (const auto& mod : design.modules) {
+                for (const auto& inst : mod.ff_instances) {
+                    if (inst.inst_name == ff->name) {
+                        ffi = &inst;
+                        break;
+                    }
+                }
+                if (ffi) break;
+            }
+            if (!ffi) continue;
+
+            // 對來源 FF 的每個 pin 做 mapping
+            for (auto& [pin, net] : ffi->pin2net) {
+                std::string tgt_pin;
+
+                if (pin == "D")      tgt_pin = "D"  + std::to_string(i);
+                else if (pin == "Q") tgt_pin = "Q"  + std::to_string(i);
+                else if (pin == "QN") tgt_pin = "QN" + std::to_string(i);
+                else if (pin == "CK" || pin == "CLK") tgt_pin = "CK";
+                else if (pin == "SE" || pin == "SI" || pin == "RESET" || pin == "SET")
+                    tgt_pin = pin; // 控制腳直接照名字 map
+                else
+                    continue; // 其他暫時略過
+
+                fout << ff->name << "/" << pin
+                     << " map " << g.inst_name << "/" << tgt_pin << "\n";
+            }
         }
     }
     fout << "\n";
 
     // ================= Part 2: Operation Log =================
     fout << "OPERATION " << mbff_groups_.size() << "\n";
-
-    int op_id = 0;
     for (const auto& g : mbff_groups_) {
         fout << "create_multibit { ";
         for (auto* ff : g.bits) {
             fout << "{" << ff->name << " " << ff->macro << " 1} ";
         }
         fout << "{" << g.inst_name << " " << g.macro << " " << g.bits.size() << "} }\n";
-        op_id++;
     }
 
     fout.close();
     std::cout << "[Output] Wrote list file: " << filename << "\n";
 }
-
 
 } // namespace my_lefdef

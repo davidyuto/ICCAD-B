@@ -27,7 +27,8 @@ obj/Data.o: src/Legalizer/Data.cpp src/Legalizer/Data.hpp \
  parser/include/def/defiPropType.hpp src/Legalizer/../Banking.h \
  src/Legalizer/../Cluster.h src/Legalizer/../LefDefParser.h \
  src/Legalizer/../CompatParser.h src/Legalizer/../MeanShift.h \
- src/Legalizer/../LibParser.h
+ src/Legalizer/../LibParser.h src/Legalizer/../VerilogParser.h \
+ src/Legalizer/../CheckFF.h
 src/Legalizer/Data.hpp:
 src/Legalizer/../LefDefParser.h:
 parser/common/common_header.h:
@@ -85,3 +86,5 @@ src/Legalizer/../LefDefParser.h:
 src/Legalizer/../CompatParser.h:
 src/Legalizer/../MeanShift.h:
 src/Legalizer/../LibParser.h:
+src/Legalizer/../VerilogParser.h:
+src/Legalizer/../CheckFF.h:

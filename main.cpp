@@ -7,15 +7,14 @@
 #include "Watch.h"
 #include "ArgParser.h"
 #include "LefDefParser.h"
+#include "VerilogParser.h"
 #include "MeanShift.h"
 #include "Cluster.h"
 #include "Banking.h"
 #include "PlacementStructure.h"
 #include "CompatParser.h"
 #include "LibParser.h"
-#include "Legalizer/Legalizer.hpp"
-#include "Legalizer/Data.hpp"
-#include "Legalizer/ResultWriter.hpp"
+#include "EmitMBFF.h"
 
 #include <iostream>
 #include <sstream>
@@ -87,10 +86,12 @@ int main(int argc, char** argv) {
     auto lef_files = ap.get_multiple_arguments("-lef");
     auto def_files = ap.get_multiple_arguments("-def");
     auto lib_files = ap.get_multiple_arguments("-lib");
+    auto v_files = ap.get_multiple_arguments("-v");
+    auto out_name = ap.get_argument("-out");
 
-    if (lef_files.empty() || def_files.empty() || lib_files.empty()) {
+    if (lef_files.empty() || def_files.empty() || lib_files.empty() || v_files.empty()) {
         cerr << "Usage: " << argv[0]
-             << " -lef <lef1> <lef2> ... -def <def1> <def2> ... -lib <lib1> ...\n";
+             << " -lef <lef1> <lef2> ... -def <def1> <def2> ... -lib <lib1> ... -v <vfile> -out <prefix>\n";
         return 1;
     }
 
@@ -104,6 +105,11 @@ int main(int argc, char** argv) {
         cout << "Reading DEF file: " << def << "\n";
         ldp.read_def(def);
     }
+
+    // === 讀取 .v ===
+    cout << "Reading VERILOG file: " << v_files[0] << "\n";
+    auto design = vparse::parse_verilog(v_files[0]);
+    auto out_v = out_name + ".v";
 
     // === 讀取 .lib ===
     LibParser lib;
@@ -142,7 +148,7 @@ int main(int argc, char** argv) {
 
     // === 顯示特定 cell ===
     vector<string> target_cells = {
-        "SNPSHOPT25_FSDN_V2_0P5", // 1-bit FF
+        "SNPSHOPT25_FSDN_V2_0P5",  // 1-bit FF
         "SNPSHOPT25_FSDN2_V2_0P5", // 2-bit MBFF
         "SNPSHOPT25_FSDN4_V2_0P5"  // 4-bit MBFF
     };
@@ -171,17 +177,24 @@ int main(int argc, char** argv) {
     // ============ 正式跑 Banking ============
     my_lefdef::Banking banking(ff_copy, lib);
     banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
-    banking.debugClusterBanking(maps, 5);  // 只印前 5 個 cluster
-    banking.printFinalGroups({0,2,5}); // 只看 MBFFGroup ID=0,2,5
-    banking.writeListFile("output.list");
+    const auto& groups = banking.getMBFFs();
 
-    Input input;                     // 自動吃 last_banking_result
-    Legalizer legalizer(&input);
-    auto result = legalizer.solve(); // 得到結果 writer
 
-    // === Write Result ===
-    result->write("output.txt"); 
+    // ============ 處理 .v檔 ============
+    std::vector<SimpleGroup> sgroups;
+    for (const auto& g : groups) {
+        SimpleGroup sg;
+        sg.new_inst    = g.inst_name;
+        sg.mbff_master = g.macro;
+        for (auto* ff : g.bits) sg.members.push_back(ff->name);
+        sgroups.push_back(std::move(sg));
+    }
+    write_banked_two_types(design, sgroups, out_v);
+    std::cout << "Wrote " << out_v << "\n";
 
+    // ============ 輸出 .list ============
+    auto out_list = out_name + ".list";
+    banking.writeListFile(out_list, design);
 
     return 0;
 }
