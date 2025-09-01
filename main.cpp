@@ -19,6 +19,7 @@
 #include "Legalizer/Legalizer.hpp"
 #include "Legalizer/Data.hpp"
 #include "Legalizer/ResultWriter.hpp"
+#include "VerilogTest.h"
 
 #include <iostream>
 #include <sstream>
@@ -113,6 +114,8 @@ int main(int argc, char** argv) {
     // === 讀取 .v ===
     cout << "Reading VERILOG file: " << v_files[0] << "\n";
     auto design = vparse::parse_verilog(v_files[0]);
+    cout << "Test file" << v_files[1] << "\n";
+    auto design2 = vparse::parse_verilog(v_files[1]);
     auto out_v = out_name + ".v";
 
     // === 讀取 .lib ===
@@ -203,6 +206,8 @@ int main(int argc, char** argv) {
     }
     write_banked_two_types(design, sgroups, out_v);
     std::cout << "Wrote " << out_v << "\n";
+
+    vparse_tools::dump_testcase2_verilog(design2, "tc2_verilog_dump.txt", /*max_per_module=*/100);
 
     // ============ 輸出 .list ============
     auto out_list = out_name + ".list";
