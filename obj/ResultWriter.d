@@ -25,7 +25,9 @@ obj/ResultWriter.o: src/Legalizer/ResultWriter.cpp \
  parser/include/def/defiPartition.hpp parser/include/def/defiPinProp.hpp \
  parser/include/def/defiBlockage.hpp parser/include/def/defiSlot.hpp \
  parser/include/def/defiFill.hpp parser/include/def/defiNonDefault.hpp \
- parser/include/def/defiPropType.hpp
+ parser/include/def/defiPropType.hpp src/Banking.h src/Cluster.h \
+ src/LefDefParser.h src/CompatParser.h src/MeanShift.h src/LibParser.h \
+ src/VerilogParser.h src/CheckFF.h
 src/Legalizer/ResultWriter.hpp:
 src/Legalizer/Data.hpp:
 src/Legalizer/../LefDefParser.h:
@@ -78,3 +80,11 @@ parser/include/def/defiSlot.hpp:
 parser/include/def/defiFill.hpp:
 parser/include/def/defiNonDefault.hpp:
 parser/include/def/defiPropType.hpp:
+src/Banking.h:
+src/Cluster.h:
+src/LefDefParser.h:
+src/CompatParser.h:
+src/MeanShift.h:
+src/LibParser.h:
+src/VerilogParser.h:
+src/CheckFF.h:

@@ -1,5 +1,7 @@
+
 #pragma once
 #include "Data.hpp"
+#include "Banking.h" 
 #include <memory>
 #include <string>
 #include <tuple>
@@ -16,4 +18,5 @@ public:
     void addCell(const Cell *cell);
     void addBlockage(const Cell *blockage);
     void write(const std::string &filepath) const;
+    void write_to_MbffGroup(vector<my_lefdef::MBFFGroup> *mbff_groups_);
 };

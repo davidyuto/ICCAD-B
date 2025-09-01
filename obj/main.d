@@ -30,7 +30,8 @@ obj/main.o: main.cpp parser/util/Logger.h parser/util/Watch.h \
  src/Legalizer/Legalizer.hpp src/Legalizer/ResultWriter.hpp \
  src/Legalizer/Data.hpp src/Legalizer/../LefDefParser.h \
  src/Legalizer/../Def.h src/Legalizer/../Lef.h \
- src/Legalizer/../PlacementStructure.h src/VerilogTest.h
+ src/Legalizer/../PlacementStructure.h src/VerilogTest.h src/DefWriter.h \
+ src/VerilogReader.hpp parser/util/util.h
 parser/util/Logger.h:
 parser/util/Watch.h:
 parser/util/ArgParser.h:
@@ -105,3 +106,6 @@ src/Legalizer/../Def.h:
 src/Legalizer/../Lef.h:
 src/Legalizer/../PlacementStructure.h:
 src/VerilogTest.h:
+src/DefWriter.h:
+src/VerilogReader.hpp:
+parser/util/util.h:

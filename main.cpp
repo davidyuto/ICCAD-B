@@ -20,6 +20,7 @@
 #include "Legalizer/Data.hpp"
 #include "Legalizer/ResultWriter.hpp"
 #include "VerilogTest.h"
+#include "DefWriter.h"
 
 #include <iostream>
 #include <sstream>
@@ -212,5 +213,27 @@ int main(int argc, char** argv) {
     // ============ 輸出 .list ============
     auto out_list = out_name + ".list";
     my_lefdef::writeListFile(banking, out_list, design);
+
+    //修正ff的座標
+    vector<my_lefdef::MBFFGroup>& Groups = banking.get_MBFFs();
+    result->write_to_MbffGroup(&Groups);
+
+    // write def
+    VerilogParser parser;
+    
+    if (parser.parseFile(out_v)) {
+        std::cout << "Successfully parsed Verilog file" << std::endl;
+        
+        // 打印網路連接（用於調試）
+        parser.printNets();
+        
+        // 你可以在這裡使用解析結果來生成 DEF nets
+        const auto& nets = parser.getNets();
+        
+        std::cout << "Total nets found: " << nets.size() << std::endl;
+    }
+    auto& ldp1 = my_lefdef::DefWriter::get_instance();
+    auto &def_ = def::Def::get_instance();
+    ldp1.write_def(def_,&Groups,parser,out_name+".def");
     return 0;
 }

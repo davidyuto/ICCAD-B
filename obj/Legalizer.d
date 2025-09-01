@@ -25,7 +25,9 @@ obj/Legalizer.o: src/Legalizer/Legalizer.cpp src/Legalizer/Legalizer.hpp \
  parser/include/def/defiPartition.hpp parser/include/def/defiPinProp.hpp \
  parser/include/def/defiBlockage.hpp parser/include/def/defiSlot.hpp \
  parser/include/def/defiFill.hpp parser/include/def/defiNonDefault.hpp \
- parser/include/def/defiPropType.hpp src/Legalizer/../Def.h \
+ parser/include/def/defiPropType.hpp src/Banking.h src/Cluster.h \
+ src/LefDefParser.h src/CompatParser.h src/MeanShift.h src/LibParser.h \
+ src/VerilogParser.h src/CheckFF.h src/Legalizer/../Def.h \
  src/Legalizer/../Lef.h src/Legalizer/../PlacementStructure.h
 src/Legalizer/Legalizer.hpp:
 src/Legalizer/ResultWriter.hpp:
@@ -80,6 +82,14 @@ parser/include/def/defiSlot.hpp:
 parser/include/def/defiFill.hpp:
 parser/include/def/defiNonDefault.hpp:
 parser/include/def/defiPropType.hpp:
+src/Banking.h:
+src/Cluster.h:
+src/LefDefParser.h:
+src/CompatParser.h:
+src/MeanShift.h:
+src/LibParser.h:
+src/VerilogParser.h:
+src/CheckFF.h:
 src/Legalizer/../Def.h:
 src/Legalizer/../Lef.h:
 src/Legalizer/../PlacementStructure.h:
