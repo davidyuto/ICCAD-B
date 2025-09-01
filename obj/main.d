@@ -26,7 +26,11 @@ obj/main.o: main.cpp parser/util/Logger.h parser/util/Watch.h \
  parser/include/def/defiPropType.hpp src/VerilogParser.h src/CheckFF.h \
  src/MeanShift.h src/LefDefParser.h src/Cluster.h src/Cluster.h \
  src/Banking.h src/CompatParser.h src/LibParser.h src/VerilogParser.h \
- src/PlacementStructure.h src/EmitMBFF.h src/ListWriter.h
+ src/PlacementStructure.h src/EmitMBFF.h src/ListWriter.h \
+ src/Legalizer/Legalizer.hpp src/Legalizer/ResultWriter.hpp \
+ src/Legalizer/Data.hpp src/Legalizer/../LefDefParser.h \
+ src/Legalizer/../Def.h src/Legalizer/../Lef.h \
+ src/Legalizer/../PlacementStructure.h
 parser/util/Logger.h:
 parser/util/Watch.h:
 parser/util/ArgParser.h:
@@ -93,3 +97,10 @@ src/VerilogParser.h:
 src/PlacementStructure.h:
 src/EmitMBFF.h:
 src/ListWriter.h:
+src/Legalizer/Legalizer.hpp:
+src/Legalizer/ResultWriter.hpp:
+src/Legalizer/Data.hpp:
+src/Legalizer/../LefDefParser.h:
+src/Legalizer/../Def.h:
+src/Legalizer/../Lef.h:
+src/Legalizer/../PlacementStructure.h:

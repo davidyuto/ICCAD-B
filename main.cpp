@@ -16,6 +16,9 @@
 #include "LibParser.h"
 #include "EmitMBFF.h"
 #include "ListWriter.h"
+#include "Legalizer/Legalizer.hpp"
+#include "Legalizer/Data.hpp"
+#include "Legalizer/ResultWriter.hpp"
 
 #include <iostream>
 #include <sstream>
@@ -179,6 +182,14 @@ int main(int argc, char** argv) {
     my_lefdef::Banking banking(ff_copy, lib);
     banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
     const auto& groups = banking.getMBFFs();
+
+    // === Legalize ===
+    Input input;                     // 自動吃 last_banking_result
+    Legalizer legalizer(&input);
+    auto result = legalizer.solve(); // 得到結果 writer
+
+    // === Write Result ===
+    result->write("output.txt"); 
 
 
     // ============ 處理 .v檔 ============
