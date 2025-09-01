@@ -15,6 +15,7 @@
 #include "CompatParser.h"
 #include "LibParser.h"
 #include "EmitMBFF.h"
+#include "ListWriter.h"
 
 #include <iostream>
 #include <sstream>
@@ -194,7 +195,6 @@ int main(int argc, char** argv) {
 
     // ============ 輸出 .list ============
     auto out_list = out_name + ".list";
-    banking.writeListFile(out_list, design);
-
+    my_lefdef::writeListFile(banking, out_list, design);
     return 0;
 }

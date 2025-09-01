@@ -5,6 +5,7 @@
 #include <regex>
 #include <cctype>
 #include <stdexcept>
+#include <iostream>
 
 namespace vparse {
 
@@ -101,7 +102,29 @@ static bool parse_instance_head(const std::string& shadow, InstHead& out) {
     out.open_paren_pos = at;
     return true;
 }
+void vparse::VerilogDesign::dump_instances(const std::string& path) const {
+    std::ofstream fout(path);
+    if (!fout) {
+        std::cerr << "[Error] Cannot open dump file: " << path << "\n";
+        return;
+    }
 
+    for (const auto& mod : modules) {
+        fout << "Module " << mod.name
+             << "  FF count=" << mod.ff_instances.size() << "\n";
+        for (const auto& ffi : mod.ff_instances) {
+            fout << "  " << ffi.inst_name
+                 << "  macro=" << ffi.cell_macro << "\n";
+            for (const auto& [pin, net] : ffi.pin2net) {
+                fout << "     ." << pin << " -> " << net << "\n";
+            }
+        }
+        fout << "\n";
+    }
+
+    fout.close();
+    std::cout << "[Dump] Wrote Verilog instances to " << path << "\n";
+}
 // 解析連線列表：named 或 positional
 static void parse_port_list(const std::string& port_blob_shadow,
                             bool& named,

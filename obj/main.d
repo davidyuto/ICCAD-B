@@ -26,7 +26,7 @@ obj/main.o: main.cpp parser/util/Logger.h parser/util/Watch.h \
  parser/include/def/defiPropType.hpp src/VerilogParser.h src/CheckFF.h \
  src/MeanShift.h src/LefDefParser.h src/Cluster.h src/Cluster.h \
  src/Banking.h src/CompatParser.h src/LibParser.h src/VerilogParser.h \
- src/PlacementStructure.h src/EmitMBFF.h
+ src/PlacementStructure.h src/EmitMBFF.h src/ListWriter.h
 parser/util/Logger.h:
 parser/util/Watch.h:
 parser/util/ArgParser.h:
@@ -92,3 +92,4 @@ src/LibParser.h:
 src/VerilogParser.h:
 src/PlacementStructure.h:
 src/EmitMBFF.h:
+src/ListWriter.h:
