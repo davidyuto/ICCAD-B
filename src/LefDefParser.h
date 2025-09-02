@@ -29,6 +29,8 @@ struct FlipFlop {
 
     std::vector<std::pair<int, double>> neighbors;
 
+    std::string hier_module;  // 倒數第二層的 module instance name
+
     double bandwidth = 0.0;
     bool isShifting = true;
     int clkIdx = -1;

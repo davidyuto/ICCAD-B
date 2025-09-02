@@ -245,37 +245,58 @@ void Banking::run_big(const CompatMaps& maps,
     }
 
     // === Step 1: Clock domain 分組 ===
-    std::unordered_map<std::string, std::vector<int>> by_clk;
+    // std::unordered_map<std::string, std::vector<int>> by_clk;
+    // for (int i = 0; i < (int)ffs_.size(); i++) {
+    //     std::string key = ffs_[i].clk_net.empty() ? "__NOCLK__" : ffs_[i].clk_net;
+    //     by_clk[key].push_back(i);
+    // }
+    // === Step 1: 分群 (Clock + Hierarchy) ===
+    std::unordered_map<std::string, std::vector<int>> by_group;
     for (int i = 0; i < (int)ffs_.size(); i++) {
-        std::string key = ffs_[i].clk_net.empty() ? "__NOCLK__" : ffs_[i].clk_net;
-        by_clk[key].push_back(i);
+        std::string clk_key  = ffs_[i].clk_net.empty() ? "__NOCLK__" : ffs_[i].clk_net;
+        std::string hier_key = ffs_[i].hier_module.empty() ? "__NOHIER__" : ffs_[i].hier_module;
+        std::string key = clk_key + "|" + hier_key;
+
+        by_group[key].push_back(i);
     }
 
     std::vector<int> belong(ffs_.size(), -1);
     int cid = 0;
 
-    std::cout << "\n========== Clock Domain Summary ==========\n";
-    for (auto& kv : by_clk) {
-        const std::string& clk = kv.first;
+    // === Debug: Group Summary ===
+    std::cout << "\n========== Clock+Hierarchy Group Summary ==========\n";
+    for (auto& kv : by_group) {
+        const std::string& key = kv.first;
         const auto& idxs = kv.second;
+        // 把 key 拆成 clk 與 hier
+        std::string clk, hier;
+        size_t bar = key.find('|');
+        if (bar != std::string::npos) {
+            clk  = key.substr(0, bar);
+            hier = key.substr(bar+1);
+        } else {
+            clk  = key;
+            hier = "__NOHIER__";
+        }
         std::cout << "CLK = " << clk
-                  << "  #FFs = " << idxs.size() << "\n";
+                << " , HIER = " << hier
+                << "  #FFs = " << idxs.size() << "\n";
         for (int k = 0; k < 5 && k < (int)idxs.size(); k++) {
             const FlipFlop& ff = ffs_[idxs[k]];
             std::cout << "   - " << ff.name
-                      << " (macro=" << ff.macro
-                      << ", x=" << ff.x
-                      << ", y=" << ff.y << ")\n";
+                    << " (macro=" << ff.macro
+                    << ", x=" << ff.x
+                    << ", y=" << ff.y << ")\n";
         }
         if ((int)idxs.size() > 5) {
             std::cout << "   ... (" << (idxs.size() - 5)
-                      << " more FFs)\n";
+                    << " more FFs)\n";
         }
     }
-    std::cout << "==========================================\n";
+    std::cout << "===================================================\n";
 
     // === Step 2: Clustering ===
-    for (auto& kv : by_clk) {
+    for (auto& kv : by_group) {
         const auto& idxs = kv.second;
         for (size_t a = 0; a < idxs.size(); a++) {
             int i = idxs[a];
@@ -401,7 +422,7 @@ void Banking::run_big(const CompatMaps& maps,
             g.cost    = lib_.getFFPowerArea(ff->macro).area +
                         lib_.getFFPowerArea(ff->macro).power;
 
-            g.inst_name = ff->name;         // 保留原本 instance 名
+            g.inst_name = ff->name + "_sb";         // 保留原本 instance 名
 
             auto info = lib_.getFFPowerArea(ff->macro);
             g.area = info.area;

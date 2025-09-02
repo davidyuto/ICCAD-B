@@ -103,6 +103,8 @@ int main(int argc, char** argv) {
 
     auto& ldp = my_lefdef::LefDefParser::get_instance();
 
+    
+
     for (const auto& lf : lef_files) {
         cout << "Reading LEF file: " << lf << "\n";
         ldp.read_lef(lf);
@@ -115,19 +117,38 @@ int main(int argc, char** argv) {
     // === 讀取 .v ===
     cout << "Reading VERILOG file: " << v_files[0] << "\n";
     auto design = vparse::parse_verilog(v_files[0]);
-    cout << "Test file" << v_files[1] << "\n";
-    auto design2 = vparse::parse_verilog(v_files[1]);
+    // cout << "Test file" << v_files[1] << "\n";
+    // auto design2 = vparse::parse_verilog(v_files[1]);
     auto out_v = out_name + ".v";
 
     // === 讀取 .lib ===
+    // LibParser lib;
+    // for (const auto& libfile : lib_files) {
+    //     cout << "Reading LIB file: " << libfile << "\n";
+    //     if (!lib.loadLib(libfile)) {
+    //         cerr << "[Error] Failed to load " << libfile << "\n";
+    //         return 1;
+    //     }
+    // }
+
     LibParser lib;
-    for (const auto& libfile : lib_files) {
-        cout << "Reading LIB file: " << libfile << "\n";
-        if (!lib.loadLib(libfile)) {
-            cerr << "[Error] Failed to load " << libfile << "\n";
-            return 1;
+
+    // 嘗試先讀快取
+    if (!lib.loadCache("ff_cache.txt")) {
+        // == 沒有快取，才讀真實 .lib ==
+        for (const auto& libfile : lib_files) {
+            cout << "Reading LIB file: " << libfile << "\n";
+            if (!lib.loadLib(libfile)) {
+                cerr << "[Error] Failed to load " << libfile << "\n";
+                return 1;
+            }
         }
+        // 測試時想加速：dump 一份快取出來
+        lib.dumpCache("ff_cache.txt");
+    } else {
+        cout << "[Info] Using cached FF power/area data.\n";
     }
+
 
     ldp.fillFlipFlopNets();
     cout << "\nParsing complete.\n";
@@ -208,7 +229,7 @@ int main(int argc, char** argv) {
     write_banked_two_types(design, sgroups, out_v);
     std::cout << "Wrote " << out_v << "\n";
 
-    vparse_tools::dump_testcase2_verilog(design2, "tc2_verilog_dump.txt", /*max_per_module=*/100);
+    // vparse_tools::dump_testcase2_verilog(design2, "tc2_verilog_dump.txt", /*max_per_module=*/100);
 
     // ============ 輸出 .list ============
     auto out_list = out_name + ".list";
@@ -237,3 +258,4 @@ int main(int argc, char** argv) {
     ldp1.write_def(def_,&Groups,parser,out_name+".def");
     return 0;
 }
+

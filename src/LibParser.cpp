@@ -1,3 +1,4 @@
+
 #include "LibParser.h"
 #include "FFSet.h"
 #include <fstream>
@@ -91,6 +92,7 @@ void LibParser::accumulateValuesFromBlock(const std::string& block, double& sum,
         }
     }
 }
+
 
 bool LibParser::parseOneFile(const std::string& path){
     std::ifstream fin(path);
@@ -353,4 +355,32 @@ bool LibParser::parseOneFile(const std::string& path){
     }
 
     return true;
+}
+
+void LibParser::dumpCache(const std::string& path) const {
+    std::ofstream fout(path);
+    if (!fout) {
+        std::cerr << "[Error] Cannot open cache file for writing: " << path << "\n";
+        return;
+    }
+    for (const auto& [cell, pa] : ff_) {
+        fout << cell << " " << pa.area << " " << pa.power << "\n";
+    }
+    std::cout << "[Cache] Dumped " << ff_.size() << " FF cells to " << path << "\n";
+}
+
+bool LibParser::loadCache(const std::string& path) {
+    std::ifstream fin(path);
+    if (!fin) {
+        std::cerr << "[Cache] No cache file found: " << path << "\n";
+        return false;
+    }
+    ff_.clear();
+    std::string cell;
+    double area, power;
+    while (fin >> cell >> area >> power) {
+        ff_[cell] = {area, power};
+    }
+    std::cout << "[Cache] Loaded " << ff_.size() << " FF cells from " << path << "\n";
+    return !ff_.empty();
 }
