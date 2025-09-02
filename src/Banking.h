@@ -38,8 +38,8 @@ public:
              bool doBanking = true); // 是否要跑到 Banking
     void debugClusterBanking(const CompatMaps& maps, int limit = 5) const;
     const std::vector<Cluster>&   getClusters() const { return clusters_; }
-    const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
     std::vector<MBFFGroup>& get_MBFFs() { return mbff_groups_; }
+    const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
     void printFinalGroups(const std::unordered_set<int>& pickIDs = {}) const;
 
 
@@ -52,6 +52,15 @@ private:
                               const CompatMaps& maps) const;
     void mergeCluster(const CompatMaps& maps);
     static inline double dist2_new(const FlipFlop& a, const FlipFlop& b);
+    struct DPState {
+        double minCost;
+        std::vector<std::vector<int>> groups;  // 每個 group 的 FF indices
+        std::vector<int> groupTypes;           // 1,2,4
+    };
+
+    DPState findOptimalBanking(const std::vector<FlipFlop*>& ffs,
+                               const CompatMaps& maps,
+                               double cx, double cy) const;
 
 private:
     std::vector<FlipFlop>& ffs_;
