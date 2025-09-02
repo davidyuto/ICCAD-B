@@ -17,6 +17,10 @@ public:
 
     // 全部 FF 對照表：cell_name -> {area, power}
     const std::unordered_map<std::string, FFPowerArea>& table() const { return ff_; }
+    void dumpCache(const std::string& path) const;
+
+    // 新增：從快取檔載入 (失敗回 false)
+    bool loadCache(const std::string& path);
 
 private:
     std::unordered_map<std::string, FFPowerArea> ff_; // 只存 FF（FSDN/LSRDPQ/LSRD）

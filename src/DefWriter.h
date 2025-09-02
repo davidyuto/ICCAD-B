@@ -9,6 +9,8 @@
 #define DEFWRITER_H
 
 #include "common_header.h"
+#include "Banking.h"
+#include "VerilogReader.hpp"
 
 #include "Lef.h"
 #include "Def.h"
@@ -22,7 +24,7 @@ class DefWriter
 public:
     static DefWriter& get_instance ();
 
-    void write_def (def::Def& def, string filename);
+    void write_def (def::Def& def, const std::vector<MBFFGroup>* mbff_groups, const VerilogParser& parser, string filename);
 
 private:
     def::Def* def_;

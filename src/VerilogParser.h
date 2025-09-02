@@ -37,6 +37,8 @@ struct VerilogModule {
 struct VerilogDesign {
     std::vector<VerilogModule> modules;
     std::unordered_map<std::string, size_t> mod_idx; // name -> modules index
+
+    void dump_instances(const std::string& path) const;
 };
 
 // ======= 解析與輸出 API =======

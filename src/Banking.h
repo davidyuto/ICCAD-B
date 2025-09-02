@@ -39,10 +39,8 @@ public:
     void debugClusterBanking(const CompatMaps& maps, int limit = 5) const;
     const std::vector<Cluster>&   getClusters() const { return clusters_; }
     const std::vector<MBFFGroup>& getMBFFs()   const { return mbff_groups_; }
+    std::vector<MBFFGroup>& get_MBFFs() { return mbff_groups_; }
     void printFinalGroups(const std::unordered_set<int>& pickIDs = {}) const;
-    // void writeListFile(const std::string& filename) const;
-    void writeListFile(const std::string& filename,
-                   const vparse::VerilogDesign& design) const;
 
 
 private:

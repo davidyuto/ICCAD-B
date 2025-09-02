@@ -1,3 +1,4 @@
+
 #include "Data.hpp"
 #include "iostream"
 #include <cmath>
@@ -71,19 +72,21 @@ Input::Input() {
     }
 
     // === Step 3. 建立 blockages (非 FF/MBFF component) ===
+    const auto& ffs   = ldp.getFFs();
+    std::unordered_set<std::string> ff_names;
+    for(const auto& ff : ffs) {
+        ff_names.insert(ff.name);
+    }
     blockages.clear();
-    for (const auto& [comp_name, comp_ptr] : comps) {
-        bool is_mbff = false;
-        for (auto& g : mbff_groups) {
-            if (g.inst_name == comp_name) { is_mbff = true; break; }
-        }
-        if (!is_mbff) {
+    for(const auto& [comp_name, comp_ptr] : comps) {
+        // 檢查這個component是否是FF或MBFF
+        if(ff_names.find(comp_name) == ff_names.end()) {
             Cell *blockage = new Cell(
-                comp_ptr->name_,
-                comp_ptr->lef_macro_->size_x_,
-                comp_ptr->lef_macro_->size_y_,
-                comp_ptr->x_,
-                comp_ptr->y_
+                comp_ptr->name_,     // 或 comp_name
+                comp_ptr->lef_macro_->size_x_,    // 需要根據實際Component結構調整
+                comp_ptr->lef_macro_->size_y_,   // 需要根據實際Component結構調整
+                comp_ptr->x_,        // 需要根據實際Component結構調整
+                comp_ptr->y_         // 需要根據實際Component結構調整
             );
             blockages.emplace_back(blockage);
         }

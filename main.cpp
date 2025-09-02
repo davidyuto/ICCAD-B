@@ -15,6 +15,12 @@
 #include "CompatParser.h"
 #include "LibParser.h"
 #include "EmitMBFF.h"
+#include "ListWriter.h"
+#include "Legalizer/Legalizer.hpp"
+#include "Legalizer/Data.hpp"
+#include "Legalizer/ResultWriter.hpp"
+#include "VerilogTest.h"
+#include "DefWriter.h"
 
 #include <iostream>
 #include <sstream>
@@ -26,58 +32,6 @@
 #include <climits>
 
 using namespace std;
-
-// === Auto-K 選擇函式 ===
-int chooseBestK(const std::vector<int>& Ks,
-                std::vector<my_lefdef::FlipFlop>& ffs,
-                const CompatMaps& maps,
-                const LibParser& lib) {
-    int bestK = Ks[0];
-    double bestScore = 1e18;
-
-    for (int K : Ks) {
-        std::cout << "\n[Auto-K] Testing K=" << K << "\n";
-
-        std::vector<my_lefdef::FlipFlop> ffs_copy = ffs;
-        my_lefdef::Banking banking(ffs_copy, lib);
-
-        // 🚩 只做 Clustering，不跑 Banking
-        banking.run_big(maps, 1.5, 2500.0, 2000.0, K, false);
-
-        auto& clusters = banking.getClusters();
-        int totalCluster = clusters.size();
-
-        std::unordered_map<int,int> hist;
-        for (auto& c : clusters) hist[(int)c.getFFs().size()]++;
-
-        int single = hist[1];
-        int large=0, medium=0;
-        for (auto& kv : hist) {
-            if (kv.first >= 12) large += kv.second;
-            if (kv.first >= 2 && kv.first <= 8) medium += kv.second;
-        }
-
-        double p1     = (totalCluster>0)? (double)single / totalCluster * 100.0 : 0;
-        double pLarge = (totalCluster>0)? (double)large  / totalCluster * 100.0 : 0;
-        double pMed   = (totalCluster>0)? (double)medium / totalCluster * 100.0 : 0;
-
-        std::cout << " - 1-bit clusters   = " << single << " (" << p1 << "%)\n";
-        std::cout << " - 2~8-bit clusters = " << medium << " (" << pMed << "%)\n";
-        std::cout << " - >=12-bit clusters= " << large  << " (" << pLarge << "%)\n";
-        std::cout << " - Total clusters   = " << totalCluster << "\n";
-
-        double score = p1*0.5 + (100-pMed)*0.3 + pLarge*1.0;
-        std::cout << " - Score = " << score << "\n";
-
-        if (score < bestScore) {
-            bestScore = score;
-            bestK = K;
-        }
-    }
-
-    std::cout << "\n[Auto-K] >>> Chosen K = " << bestK << " <<<\n";
-    return bestK;
-}
 
 int main(int argc, char** argv) {
     auto& ap = ArgParser::get();
@@ -97,6 +51,8 @@ int main(int argc, char** argv) {
 
     auto& ldp = my_lefdef::LefDefParser::get_instance();
 
+    
+
     for (const auto& lf : lef_files) {
         cout << "Reading LEF file: " << lf << "\n";
         ldp.read_lef(lf);
@@ -109,17 +65,38 @@ int main(int argc, char** argv) {
     // === 讀取 .v ===
     cout << "Reading VERILOG file: " << v_files[0] << "\n";
     auto design = vparse::parse_verilog(v_files[0]);
+    // cout << "Test file" << v_files[1] << "\n";
+    // auto design2 = vparse::parse_verilog(v_files[1]);
     auto out_v = out_name + ".v";
 
     // === 讀取 .lib ===
+    // LibParser lib;
+    // for (const auto& libfile : lib_files) {
+    //     cout << "Reading LIB file: " << libfile << "\n";
+    //     if (!lib.loadLib(libfile)) {
+    //         cerr << "[Error] Failed to load " << libfile << "\n";
+    //         return 1;
+    //     }
+    // }
+
     LibParser lib;
-    for (const auto& libfile : lib_files) {
-        cout << "Reading LIB file: " << libfile << "\n";
-        if (!lib.loadLib(libfile)) {
-            cerr << "[Error] Failed to load " << libfile << "\n";
-            return 1;
+
+    // 嘗試先讀快取
+    if (!lib.loadCache("ff_cache.txt")) {
+        // == 沒有快取，才讀真實 .lib ==
+        for (const auto& libfile : lib_files) {
+            cout << "Reading LIB file: " << libfile << "\n";
+            if (!lib.loadLib(libfile)) {
+                cerr << "[Error] Failed to load " << libfile << "\n";
+                return 1;
+            }
         }
+        // 測試時想加速：dump 一份快取出來
+        lib.dumpCache("ff_cache.txt");
+    } else {
+        cout << "[Info] Using cached FF power/area data.\n";
     }
+
 
     ldp.fillFlipFlopNets();
     cout << "\nParsing complete.\n";
@@ -172,29 +149,77 @@ int main(int argc, char** argv) {
     // ============ Auto-K 選擇 ============
     std::vector<my_lefdef::FlipFlop> ff_copy = ffs;
     std::vector<int> candidateKs = {10,12,15,18,20};
-    int bestK = chooseBestK(candidateKs, ff_copy, maps, lib);
+    // int bestK = chooseBestK(candidateKs, ff_copy, maps, lib);
 
     // ============ 正式跑 Banking ============
     my_lefdef::Banking banking(ff_copy, lib);
-    banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
+    banking.run_big(maps, 2.0, 2500.0, 2000.0, 10, true);
     const auto& groups = banking.getMBFFs();
+
+    // === Legalize ===
+    Input input;                     // 自動吃 last_banking_result
+    Legalizer legalizer(&input);
+    auto result = legalizer.solve(); // 得到結果 writer
+
+    // === Write Result ===
+    // result->write("output.txt"); 
 
 
     // ============ 處理 .v檔 ============
     std::vector<SimpleGroup> sgroups;
     for (const auto& g : groups) {
         SimpleGroup sg;
-        sg.new_inst    = g.inst_name;
+
+        // 去掉 hierachy
+        auto pos = g.inst_name.find_last_of('/');
+        if (pos != std::string::npos)
+            sg.new_inst = g.inst_name.substr(pos + 1);
+        else
+            sg.new_inst = g.inst_name;
+
         sg.mbff_master = g.macro;
-        for (auto* ff : g.bits) sg.members.push_back(ff->name);
+
+        for (auto* ff : g.bits) {
+            std::string name = ff->name;
+            auto p2 = name.find_last_of('/');
+            if (p2 != std::string::npos) name = name.substr(p2 + 1);
+            sg.members.push_back(name);
+        }
+
         sgroups.push_back(std::move(sg));
     }
     write_banked_two_types(design, sgroups, out_v);
     std::cout << "Wrote " << out_v << "\n";
 
+    // vparse_tools::dump_testcase2_verilog(design2, "tc2_verilog_dump.txt", /*max_per_module=*/100);
+
     // ============ 輸出 .list ============
     auto out_list = out_name + ".list";
-    banking.writeListFile(out_list, design);
+    my_lefdef::writeListFile(banking, out_list, design);
 
+    //修正ff的座標
+    vector<my_lefdef::MBFFGroup>& Groups = banking.get_MBFFs();
+    result->write_to_MbffGroup(&Groups);
+
+    // write def
+    VerilogParser parser;
+    
+    if (parser.parseFile(out_v)) {
+        std::cout << "Successfully parsed Verilog file" << std::endl;
+        
+        // 打印網路連接（用於調試）
+        parser.printNets();
+        
+        // 你可以在這裡使用解析結果來生成 DEF nets
+        const auto& nets = parser.getNets();
+        
+        std::cout << "Total nets found: " << nets.size() << std::endl;
+    }
+    auto& ldp1 = my_lefdef::DefWriter::get_instance();
+    auto &def_ = def::Def::get_instance();
+    ldp1.write_def(def_,&Groups,parser,out_name+".def");
     return 0;
 }
+
+
+
