@@ -124,12 +124,13 @@ static void write_components (def::Def* def, const std::vector<my_lefdef::MBFFGr
     std::vector<def::ComponentPtr> components_to_write;
     
     // 建立 FF 名稱集合用於過濾
+    auto& ldp = my_lefdef::LefDefParser::get_instance();
+    const auto& ffs   = ldp.getFFs();
     std::unordered_set<std::string> ff_names;
-    if (mbff_groups) {
-        for (const auto group : *mbff_groups) {
-            ff_names.insert(group.inst_name);
-        }
+    for(const auto& ff : ffs) {
+        ff_names.insert(ff.name);
     }
+    
     
     // 過濾掉 FF，保留其他 components
     for (auto it : component_umap) {

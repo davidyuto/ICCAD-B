@@ -33,58 +33,6 @@
 
 using namespace std;
 
-// === Auto-K 選擇函式 ===
-int chooseBestK(const std::vector<int>& Ks,
-                std::vector<my_lefdef::FlipFlop>& ffs,
-                const CompatMaps& maps,
-                const LibParser& lib) {
-    int bestK = Ks[0];
-    double bestScore = 1e18;
-
-    for (int K : Ks) {
-        std::cout << "\n[Auto-K] Testing K=" << K << "\n";
-
-        std::vector<my_lefdef::FlipFlop> ffs_copy = ffs;
-        my_lefdef::Banking banking(ffs_copy, lib);
-
-        // 🚩 只做 Clustering，不跑 Banking
-        banking.run_big(maps, 1.5, 2500.0, 2000.0, K, false);
-
-        auto& clusters = banking.getClusters();
-        int totalCluster = clusters.size();
-
-        std::unordered_map<int,int> hist;
-        for (auto& c : clusters) hist[(int)c.getFFs().size()]++;
-
-        int single = hist[1];
-        int large=0, medium=0;
-        for (auto& kv : hist) {
-            if (kv.first >= 12) large += kv.second;
-            if (kv.first >= 2 && kv.first <= 8) medium += kv.second;
-        }
-
-        double p1     = (totalCluster>0)? (double)single / totalCluster * 100.0 : 0;
-        double pLarge = (totalCluster>0)? (double)large  / totalCluster * 100.0 : 0;
-        double pMed   = (totalCluster>0)? (double)medium / totalCluster * 100.0 : 0;
-
-        std::cout << " - 1-bit clusters   = " << single << " (" << p1 << "%)\n";
-        std::cout << " - 2~8-bit clusters = " << medium << " (" << pMed << "%)\n";
-        std::cout << " - >=12-bit clusters= " << large  << " (" << pLarge << "%)\n";
-        std::cout << " - Total clusters   = " << totalCluster << "\n";
-
-        double score = p1*0.5 + (100-pMed)*0.3 + pLarge*1.0;
-        std::cout << " - Score = " << score << "\n";
-
-        if (score < bestScore) {
-            bestScore = score;
-            bestK = K;
-        }
-    }
-
-    std::cout << "\n[Auto-K] >>> Chosen K = " << bestK << " <<<\n";
-    return bestK;
-}
-
 int main(int argc, char** argv) {
     auto& ap = ArgParser::get();
     ap.initialize(argc, argv);
@@ -201,11 +149,11 @@ int main(int argc, char** argv) {
     // ============ Auto-K 選擇 ============
     std::vector<my_lefdef::FlipFlop> ff_copy = ffs;
     std::vector<int> candidateKs = {10,12,15,18,20};
-    int bestK = chooseBestK(candidateKs, ff_copy, maps, lib);
+    // int bestK = chooseBestK(candidateKs, ff_copy, maps, lib);
 
     // ============ 正式跑 Banking ============
     my_lefdef::Banking banking(ff_copy, lib);
-    banking.run_big(maps, 1.3, 2500.0, 2000.0, bestK, true);
+    banking.run_big(maps, 2.0, 2500.0, 2000.0, 10, true);
     const auto& groups = banking.getMBFFs();
 
     // === Legalize ===
@@ -258,4 +206,6 @@ int main(int argc, char** argv) {
     ldp1.write_def(def_,&Groups,parser,out_name+".def");
     return 0;
 }
+
+
 
