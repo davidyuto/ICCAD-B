@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     auto& ldp = my_lefdef::LefDefParser::get_instance();
 
     
-
+    
     for (const auto& lf : lef_files) {
         cout << "Reading LEF file: " << lf << "\n";
         ldp.read_lef(lf);
@@ -61,6 +61,36 @@ int main(int argc, char** argv) {
         cout << "Reading DEF file: " << def << "\n";
         ldp.read_def(def);
     }
+
+    //---- 獲取 blockages ----
+    auto& d = def::Def::get_instance();
+    //d.read_def(def);
+    const auto& blockages = d.get_blockages();
+    if(!blockages.empty()){
+        cout << "Found " << blockages.size() << " blockages:" << endl;
+        int placement_count = 0;
+        int layer_count = 0;
+        for (const auto& blockage : blockages) {
+            if (blockage->type_ == def::BlockageType::PLACEMENT) {
+                placement_count++;
+                cout << "PLACEMENT blockage: (" 
+                    << blockage->lx_ << " " << blockage->ly_ << " "
+                    << blockage->ux_ << " " << blockage->uy_ << ")" << endl;
+            } else {
+                layer_count++;
+                cout << "LAYER " << blockage->layer_name_ << " blockage: ("
+                    << blockage->lx_ << " " << blockage->ly_ << " "
+                    << blockage->ux_ << " " << blockage->uy_ << ")";
+                if (blockage->spacing_ > 0) {
+                    cout << " SPACING=" << blockage->spacing_;
+                }
+                cout << endl;
+            }
+        }
+        cout << "Summary: " << placement_count << " placement, " 
+            << layer_count << " layer blockages" << endl;
+    }
+    //-----------------------
 
     // === 讀取 .v ===
     cout << "Reading VERILOG file: " << v_files[0] << "\n";
@@ -169,9 +199,23 @@ int main(int argc, char** argv) {
     std::vector<SimpleGroup> sgroups;
     for (const auto& g : groups) {
         SimpleGroup sg;
-        sg.new_inst    = g.inst_name;
+
+        // 去掉 hierachy
+        auto pos = g.inst_name.find_last_of('/');
+        if (pos != std::string::npos)
+            sg.new_inst = g.inst_name.substr(pos + 1);
+        else
+            sg.new_inst = g.inst_name;
+
         sg.mbff_master = g.macro;
-        for (auto* ff : g.bits) sg.members.push_back(ff->name);
+
+        for (auto* ff : g.bits) {
+            std::string name = ff->name;
+            auto p2 = name.find_last_of('/');
+            if (p2 != std::string::npos) name = name.substr(p2 + 1);
+            sg.members.push_back(name);
+        }
+
         sgroups.push_back(std::move(sg));
     }
     write_banked_two_types(design, sgroups, out_v);

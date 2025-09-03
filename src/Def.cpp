@@ -31,6 +31,7 @@ struct Def::Impl
     vector<RowPtr> rows_;
     vector<TrackPtr> tracks_;
     vector<GCellGridPtr> gcell_grids_;
+    vector<BlockagePtr> blockages_;
 
     unordered_map<string, PinPtr> pin_umap_;
     unordered_map<string, ComponentPtr> component_umap_;
@@ -137,6 +138,11 @@ PinPtr Def::get_pin (string name)
     }
 }
 
+const BlockageVec& Def::get_blockages() const
+{
+    return pimpl_->blockages_;
+}
+
 
 /**
  * Read a DEF file @a filename.
@@ -173,6 +179,10 @@ void Def::read_def (string filename)
     // defrSetSNetCbk(DefParser::set_special_net);
     // cout << "SPECIAL NETS..." << endl;
 
+    // 添加 BLOCKAGE callback 註冊
+    defrSetBlockageStartCbk(DefParser::set_blockage_start);
+    defrSetBlockageCbk(DefParser::set_blockage);
+
 	defrSetNetStartCbk(DefParser::set_net_start);
 	defrSetNetCbk(DefParser::set_net);
 
@@ -201,6 +211,7 @@ void Def::report () const
     cout << "\t#Components: " << pimpl_->component_umap_.size() << endl;
     cout << "\t#Pins      : " << pimpl_->pin_umap_.size() << endl;
     cout << "\t#Nets      : " << pimpl_->net_umap_.size() << endl;
+    cout << "\t#Blockages : " << pimpl_->blockages_.size() << endl;  // 新增
     cout << endl;
 }
 
@@ -230,6 +241,11 @@ void Def::report_verbose () const
     cout << "Nets: " << endl;
     for (auto& it : pimpl_->net_umap_) {
         cout << "\t" << *(it.second) << endl;
+    }
+
+    cout << "Blockages: " << endl;
+    for (auto& b : pimpl_->blockages_) {
+        cout << "\t" << *b << endl;
     }
 }
 
@@ -444,6 +460,52 @@ int DefParser::set_net_start (defrCallbackType_e, int num_nets,
 
     return 0;
 }
+
+int DefParser::set_blockage_start (defrCallbackType_e, int num_blockages, 
+                                   defiUserData ud)
+{
+    auto def = static_cast<Def*>(ud); 
+    auto& blockages = def->pimpl_->blockages_;
+    blockages.reserve(num_blockages);
+
+    return 0;
+}
+
+int DefParser::set_blockage (defrCallbackType_e, defiBlockage* blockage, 
+                             defiUserData ud)
+{
+    auto def = static_cast<Def*>(ud); 
+    auto& blockages = def->pimpl_->blockages_;
+
+    // defiBlockage 可能包含多個矩形
+    for (int i = 0; i < blockage->numRectangles(); i++) {
+        auto the_blockage = make_shared<Blockage>();
+        
+        // 設置 blockage 類型 - 使用正確的 API
+        if (blockage->hasPlacement()) {
+            the_blockage->type_ = BlockageType::PLACEMENT;
+        } else if (blockage->hasLayer()) {
+            the_blockage->type_ = BlockageType::LAYER;
+            the_blockage->layer_name_ = blockage->layerName();
+            
+            // 檢查是否有 spacing 屬性 - 使用正確的方法名
+            if (blockage->hasSpacing()) {
+                the_blockage->spacing_ = blockage->minSpacing();
+            }
+        }
+        
+        // 獲取矩形座標 - 使用正確的 API
+        the_blockage->lx_ = blockage->xl(i);
+        the_blockage->ly_ = blockage->yl(i);
+        the_blockage->ux_ = blockage->xh(i);
+        the_blockage->uy_ = blockage->yh(i);
+        
+        blockages.push_back(the_blockage);
+    }
+
+    return 0;
+}
+
 
 static void process_routed_net (NetPtr the_net, defiNet* net)
 {
@@ -750,6 +812,24 @@ ostream& operator<< (ostream& os, const Net& n)
        << ", num_vias=" << n.vias_.size()
        << ")";
 
+    return os;
+}
+
+// 添加 operator<< 重載實現
+ostream& operator<< (ostream& os, const Blockage& b)
+{
+    os << "Blockage (";
+    if (b.type_ == BlockageType::PLACEMENT) {
+        os << "PLACEMENT";
+    } else {
+        os << "LAYER=" << b.layer_name_;
+        if (b.spacing_ > 0) {
+            os << ", SPACING=" << b.spacing_;
+        }
+    }
+    os << ", RECT=(" << b.lx_ << " " << b.ly_ << " " << b.ux_ << " " << b.uy_ << ")";
+    os << ")";
+    
     return os;
 }
 
