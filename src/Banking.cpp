@@ -490,8 +490,30 @@ void Banking::run_big(const CompatMaps& maps,
     //                   << " (" << ff->new_x << "," << ff->new_y << ")\n";
     //     }
     // }
+    
+    gid = static_cast<int>(mbff_groups_.size());
+    if (ldp.getMBFFs().empty()) {
+        std::cout << "[Debug] No existing MBFFs found in DEF.\n";
+    }
+    else {
+        std::cout << "[Debug] Added " << ldp.getMBFFs().size()
+        << " existing MBFFs from DEF into mbff_groups_\n";
+    }
+
+
+    for (const auto& mb : ldp.getMBFFs()) {
+        MBFFGroup g;
+        g.id       = gid++;
+        g.inst_name = mb.group;              
+        g.macro = mb.macro;
+        g.place_x  = mb.x;
+        g.place_y  = mb.y;
+        g.cost     = 0.0;  
+        mbff_groups_.push_back(std::move(g));
+    }
     last_banking_result = mbff_groups_;
 }
+
 
 void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
     std::cout << "\n[Final Banking Result]\n";

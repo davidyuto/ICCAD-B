@@ -122,8 +122,10 @@ struct FlipFlop {
 
 
 struct MBFF {
-    std::string group;             // 以 component 名称去掉末尾“_bit”编号得到
-    std::vector<FlipFlop> bits;    // 每一位的实例和坐标
+    std::string group;            
+    std::string macro;
+    std::vector<FlipFlop> bits;    
+    int x = 0, y = 0;
 };
 
 struct NetConnection {
