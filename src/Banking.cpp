@@ -25,16 +25,27 @@ static bool singles_have_common_mbff(const std::string& mA,
     for (const auto& x : B) if (s.count(x)) return true;
     return false;
 }
-
-Banking::Banking(std::vector<FlipFlop>& ffs, const LibParser& lib)
-: ffs_(ffs), lib_(lib) {}
-
 double Banking::computeCost(const std::string& mbff_macro,
                             const std::vector<FlipFlop*>& bits) const {
     const FFPowerArea info = lib_.getFFPowerArea(mbff_macro);
     if (info.area <= 0.0 && info.power <= 0.0)
         return std::numeric_limits<double>::max();
 
+    // === Step 1: 掃描所有 cell，找出 area/power 範圍 ===
+    double minArea = 1e18, maxArea = 0.0;
+    double minPower = 1e18, maxPower = 0.0;
+    for (const auto& kv : lib_.table()) {
+        minArea  = std::min(minArea,  kv.second.area);
+        maxArea  = std::max(maxArea,  kv.second.area);
+        minPower = std::min(minPower, kv.second.power);
+        maxPower = std::max(maxPower, kv.second.power);
+    }
+
+    // === Step 2: normalize ===
+    double normArea  = (info.area  - minArea)  / (maxArea  - minArea + 1e-9);
+    double normPower = (info.power - minPower) / (maxPower - minPower + 1e-9);
+
+    // === Step 3: 加入 cluster displacement (可選) ===
     int cx = 0, cy = 0;
     for (auto* ff : bits) { cx += ff->new_x; cy += ff->new_y; }
     cx /= (int)bits.size(); cy /= (int)bits.size();
@@ -45,20 +56,103 @@ double Banking::computeCost(const std::string& mbff_macro,
         double dy = ff->new_y - cy;
         disp += std::sqrt(dx*dx + dy*dy);
     }
+    double normDisp = disp / (disp + 100.0); // scale to 0~1
 
-    // === Cost function ===
-    double cost = disp * 0.05 + info.area + info.power;
+    // === Step 4: 組合 cost ===
+    double alpha = 0.5;  // 面積權重
+    double beta  = 0.5;  // 功耗權重
+    double gamma = 0.2;  // 位移權重
 
-    // === Debug 印出詳細資訊 ===
-    // std::cout << "[Cost] macro=" << mbff_macro
-    //           << " bits=" << bits.size()
-    //           << " area=" << info.area
-    //           << " power=" << info.power
-    //           << " disp=" << disp
-    //           << " => cost=" << cost << "\n";
-
+    double cost = alpha * normArea + beta * normPower ;
     return cost;
 }
+
+struct DPState {
+    double minCost;
+    std::vector<std::vector<int>> groups;  // 每個 group 內 FF 的 indices
+    std::vector<int> groupTypes;           // 1, 2, or 4
+};
+
+Banking::DPState Banking::findOptimalBanking(const std::vector<FlipFlop*>& ffs,
+                                             const CompatMaps& maps,
+                                             double cx, double cy) const {
+    int n = ffs.size();
+    if (n == 0) return {0.0, {}, {}};
+
+    std::vector<DPState> dp(1 << n);
+    dp[0] = {0.0, {}, {}};
+
+    std::unordered_map<int, double> groupCost;
+    std::unordered_map<int, std::string> groupMacro;
+
+    // 枚舉所有可能的 {1,2,4} group
+    for (int mask = 1; mask < (1 << n); mask++) {
+        int bitCount = __builtin_popcount(mask);
+        if (bitCount != 1 && bitCount != 2 && bitCount != 4) continue;
+
+        std::vector<FlipFlop*> group;
+        for (int i = 0; i < n; i++) {
+            if (mask & (1 << i)) {
+                group.push_back(ffs[i]);
+            }
+        }
+
+        if (bitCount == 1) {
+            // 單顆 FF：直接 fallback 為 SBFF
+            groupCost[mask] = lib_.getFFPowerArea(group[0]->macro).area +
+                            lib_.getFFPowerArea(group[0]->macro).power;
+            groupMacro[mask] = group[0]->macro;
+        } else {
+            std::string macro = pickMBFFMacro(group, maps);
+            if (!macro.empty()) {
+                double cost = computeCost(macro, group);
+                for (auto* ff : group) {
+                    double dist = std::sqrt(pow(ff->new_x - cx, 2) +
+                                            pow(ff->new_y - cy, 2));
+                    cost += dist * 0.001;
+                }
+                groupCost[mask] = cost;
+                groupMacro[mask] = macro;
+            }
+        }
+
+    }
+
+    for (int mask = 1; mask < (1 << n); mask++) {
+        dp[mask].minCost = 1e18;
+
+        for (int sub = mask; sub > 0; sub = (sub - 1) & mask) {
+            if (groupCost.count(sub) == 0) continue;
+
+            int remain = mask ^ sub;
+            double newCost = dp[remain].minCost + groupCost[sub];
+
+            if (newCost < dp[mask].minCost) {
+                DPState candidate = dp[remain];   // 拷貝已有方案
+                candidate.minCost = newCost;
+
+                std::vector<int> groupIndices;
+                for (int i = 0; i < n; i++) {
+                    if (sub & (1 << i)) groupIndices.push_back(i);
+                }
+                candidate.groups.push_back(groupIndices);
+                candidate.groupTypes.push_back(__builtin_popcount(sub));
+
+                dp[mask] = std::move(candidate);  // 更新最佳解
+            }
+
+        }
+    }
+
+    return dp[(1 << n) - 1];
+}
+
+
+
+Banking::Banking(std::vector<FlipFlop>& ffs, const LibParser& lib)
+: ffs_(ffs), lib_(lib) {}
+
+
 
 void Banking::debugClusterBanking(const CompatMaps& maps, int limit) const {
     std::cout << "\n[Debug] Show up to " << limit << " clusters banking process with cost breakdown:\n";
@@ -224,7 +318,7 @@ void Banking::run_big(const CompatMaps& maps,
                       double h_cap,
                       int forceK,          // Auto-K 用，強制指定 K
                       bool doBanking) {    // 是否要跑到 Banking
-    std::cout<< "now size" << mbff_groups_.size() << "\n";
+    std::cout<< "now size " << mbff_groups_.size() << "\n";
     clusters_.clear();
     mbff_groups_.clear();
 
@@ -244,51 +338,17 @@ void Banking::run_big(const CompatMaps& maps,
         }
     }
 
-
     // === Step 1: 分群 (Clock + Hierarchy) ===
     std::unordered_map<std::string, std::vector<int>> by_group;
     for (int i = 0; i < (int)ffs_.size(); i++) {
         std::string clk_key  = ffs_[i].clk_net.empty() ? "__NOCLK__" : ffs_[i].clk_net;
         std::string hier_key = ffs_[i].hier_module.empty() ? "__NOHIER__" : ffs_[i].hier_module;
         std::string key = clk_key + "|" + hier_key;
-
         by_group[key].push_back(i);
     }
 
     std::vector<int> belong(ffs_.size(), -1);
     int cid = 0;
-
-    // === Debug: Group Summary ===
-    std::cout << "\n========== Clock+Hierarchy Group Summary ==========\n";
-    for (auto& kv : by_group) {
-        const std::string& key = kv.first;
-        const auto& idxs = kv.second;
-        // 把 key 拆成 clk 與 hier
-        std::string clk, hier;
-        size_t bar = key.find('|');
-        if (bar != std::string::npos) {
-            clk  = key.substr(0, bar);
-            hier = key.substr(bar+1);
-        } else {
-            clk  = key;
-            hier = "__NOHIER__";
-        }
-        std::cout << "CLK = " << clk
-                << " , HIER = " << hier
-                << "  #FFs = " << idxs.size() << "\n";
-        for (int k = 0; k < 5 && k < (int)idxs.size(); k++) {
-            const FlipFlop& ff = ffs_[idxs[k]];
-            std::cout << "   - " << ff.name
-                    << " (macro=" << ff.macro
-                    << ", x=" << ff.x
-                    << ", y=" << ff.y << ")\n";
-        }
-        if ((int)idxs.size() > 5) {
-            std::cout << "   ... (" << (idxs.size() - 5)
-                    << " more FFs)\n";
-        }
-    }
-    std::cout << "===================================================\n";
 
     // === Step 2: Clustering ===
     for (auto& kv : by_group) {
@@ -321,34 +381,23 @@ void Banking::run_big(const CompatMaps& maps,
         }
     }
 
-    // mergeCluster(maps);
-    // === Step 3: 如果只要 Clustering，直接返回 ===
-    if (!doBanking) {
-        return;
-    }
+    if (!doBanking) return;
 
     auto& ldp = my_lefdef::LefDefParser::get_instance();
-
-    // === Step 4: Cluster → MBFF (Banking) ===
 
     const double displacement_threshold = 2500.0;
     int gid = 0;
     std::unordered_set<FlipFlop*> usedFF;
 
+    // === Step 4: Cluster → MBFF (Banking) ===
     for (auto& c : clusters_) {
         std::vector<FlipFlop*> bits;
         c.computeCenter();
 
-        // 過濾掉位移太大的 FF
-        for (auto* ff : c.getFFs()) {
-
-                bits.push_back(ff);
-            
-        }
-
+        for (auto* ff : c.getFFs()) bits.push_back(ff);
         int n = (int)bits.size();
 
-        // 先組 4-bit
+        // ---- 4-bit banking ----
         while (n >= 4) {
             std::vector<FlipFlop*> sub(bits.end()-4, bits.end());
             bits.erase(bits.end()-4, bits.end());
@@ -363,21 +412,20 @@ void Banking::run_big(const CompatMaps& maps,
                 g.place_x = c.getCenterX();
                 g.place_y = c.getCenterY();
                 g.cost    = computeCost(mb, sub);
-
                 g.inst_name = sub[0]->name + "_mb";
-                auto info = lib_.getFFPowerArea(mb);
-                g.area = info.area;
+                g.area = lib_.getFFPowerArea(mb).area;
 
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub) usedFF.insert(ff);
             }
         }
 
-        // 特判 3 → 2+1
+        // ---- 特判 3 → 2+1 ----
         if (n == 3) {
             std::vector<FlipFlop*> sub2(bits.end()-2, bits.end());
             bits.erase(bits.end()-2, bits.end());
             n -= 2;
+
             std::string mb = pickMBFFMacro(sub2, maps);
             if (!mb.empty()) {
                 MBFFGroup g;
@@ -387,19 +435,16 @@ void Banking::run_big(const CompatMaps& maps,
                 g.place_x = c.getCenterX();
                 g.place_y = c.getCenterY();
                 g.cost = computeCost(mb, sub2);
-
                 g.inst_name = sub2[0]->name + "_mb";
-                auto info = lib_.getFFPowerArea(mb);
-                g.area = info.area;
+                g.area = lib_.getFFPowerArea(mb).area;
 
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub2) usedFF.insert(ff);
             }
-
             n = (int)bits.size();
         }
 
-        // 如果還有 2
+        // ---- 2-bit banking ----
         if (n == 2) {
             std::vector<FlipFlop*> sub(bits.end()-2, bits.end());
             bits.erase(bits.end()-2, bits.end());
@@ -414,48 +459,77 @@ void Banking::run_big(const CompatMaps& maps,
                 g.place_x = c.getCenterX();
                 g.place_y = c.getCenterY();
                 g.cost = computeCost(mb, sub);
-
                 g.inst_name = sub[0]->name + "_mb";
-                auto info = lib_.getFFPowerArea(mb);
-                g.area = info.area;
+                g.area = lib_.getFFPowerArea(mb).area;
 
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub) usedFF.insert(ff);
             }
         }
 
-        // 如果還有 1
+        // ---- 單顆 (可能換 cell type) ----
         if (n == 1) {
             FlipFlop* ff = bits.back();
             bits.pop_back();
-            n--;
+
+            // 原始 macro
+            auto best_macro = ff->macro;
+            auto best_info  = lib_.getFFPowerArea(best_macro);
+            double best_cost = best_info.area + best_info.power;
+
+            // 嘗試找到同 family 更好的 single-bit
+            for (const auto& cand : CompatParser::single_ff_set()) {
+                if (CompatParser::family_of(cand) != CompatParser::family_of(ff->macro))
+                    continue;
+                auto info = lib_.getFFPowerArea(cand);
+                if (info.area <= 0 || info.power <= 0) continue;
+
+                double cost = info.area + info.power;
+                if (cost < best_cost) {
+                    best_cost  = cost;
+                    best_macro = cand;
+                }
+            }
 
             MBFFGroup g;
             g.id      = gid++;
-            g.macro   = ff->macro; // 單顆就原本 macro
-            g.bits    = {ff};
+            g.macro   = best_macro;       // 如果有找到更好 → 換 cell type
+            g.bits.clear();
+            g.bits.push_back(ff);
             g.place_x = ff->new_x;
             g.place_y = ff->new_y;
-            g.cost    = lib_.getFFPowerArea(ff->macro).area +
-                        lib_.getFFPowerArea(ff->macro).power;
-
+            g.cost    = best_cost;
             g.inst_name = ff->name + "_sb";
-            auto info = lib_.getFFPowerArea(ff->macro);
-            g.area = info.area;
+            g.area = lib_.getFFPowerArea(best_macro).area;
 
             mbff_groups_.push_back(std::move(g));
             usedFF.insert(ff);
         }
     }
 
-    // === Debug: Sanity check ===
+    // ---- 加入 DEF 裡已有的 MBFF ----
+    gid = static_cast<int>(mbff_groups_.size());
+    if (!ldp.getMBFFs().empty()) {
+        std::cout << "[Debug] Added " << ldp.getMBFFs().size()
+                  << " existing MBFFs from DEF into mbff_groups_\n";
+    }
+    for (const auto& mb : ldp.getMBFFs()) {
+        MBFFGroup g;
+        g.id       = gid++;
+        g.inst_name = mb.group;
+        g.macro    = mb.macro;
+        g.place_x  = mb.x;
+        g.place_y  = mb.y;
+        g.cost     = 0.0;
+        mbff_groups_.push_back(std::move(g));
+    }
+
+    // === Debug ===
     int totalFF = 0;
     for (auto& g : mbff_groups_) totalFF += g.bits.size();
     std::cout << "[Check] FF in MBFF groups = " << totalFF
-            << " , original total = " << ffs_.size() << "\n";
+              << " , original total = " << ffs_.size() << "\n";
 
-
-    // === Step 5: Debug 輸出 ===
     std::cout << "\n[Banking] Final MBFF groups = " << mbff_groups_.size() << "\n";
     std::unordered_map<int,int> sizeHist;
     for (const auto& g : mbff_groups_) sizeHist[g.bits.size()]++;
@@ -463,7 +537,6 @@ void Banking::run_big(const CompatMaps& maps,
     for (auto& kv : sizeHist) {
         std::cout << "  size=" << kv.first << " : " << kv.second << " groups\n";
     }
-
     std::unordered_map<int,int> clusterSizeHist;
     for (const auto& c : clusters_) clusterSizeHist[(int)c.getFFs().size()]++;
     std::cout << "\n========== Cluster Size Distribution ==========\n";
@@ -471,46 +544,9 @@ void Banking::run_big(const CompatMaps& maps,
         std::cout << " size=" << kv.first << " : " << kv.second << " clusters\n";
     }
 
-    // int showN = 3;
-    // std::cout << "\n[Debug] Show first " << showN << " MBFF groups:\n";
-    // for (size_t i = 0; i < mbff_groups_.size() && i < (size_t)showN; i++) {
-    //     const auto& g = mbff_groups_[i];
-    //     std::cout << "MBFFGroup ID=" << g.id
-    //               << " inst=" << g.inst_name
-    //               << " macro=" << g.macro
-    //               << " size=" << g.bits.size()
-    //               << " (" << g.width << "x" << g.height << ")"
-    //               << " area=" << g.area
-    //               << " cost=" << g.cost
-    //               << " @(" << g.place_x << "," << g.place_y << ")\n";
-    //     for (auto* ff : g.bits) {
-    //         std::cout << "   - FF " << ff->name
-    //                   << " macro=" << ff->macro
-    //                   << " (" << ff->width << "x" << ff->height << ")"
-    //                   << " (" << ff->new_x << "," << ff->new_y << ")\n";
-    //     }
-    // }
     last_banking_result = mbff_groups_;
 }
 
-void Banking::printFinalGroups(const std::unordered_set<int>& pickIDs) const {
-    std::cout << "\n[Final Banking Result]\n";
-    for (const auto& g : mbff_groups_) {
-        if (!pickIDs.empty() && !pickIDs.count(g.id)) continue;
-            std::cout << "MBFFGroup ID=" << g.id
-                    << " inst=" << g.inst_name
-                    << " macro=" << g.macro
-                    << " area=" << g.area
-                    << " size=" << g.bits.size()
-                    << " (" << g.width << "x" << g.height << ")"
-                    << " cost=" << g.cost
-                    << " @(" << g.place_x << "," << g.place_y << ")\n";
-        for (auto* ff : g.bits) {
-            std::cout << "   - FF " << ff->name
-                      << " macro=" << ff->macro
-                      << " (" << ff->width << "x" << ff->height << ")"
-                      << " (" << ff->new_x << "," << ff->new_y << ")\n";
-        }
-    }
-}
+
+
 } // namespace my_lefdef

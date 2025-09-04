@@ -107,6 +107,9 @@ void LefDefParser::extractFlipFlops() {
             auto group = extractGroupName(comp->name_);
             auto &mb = tmp[group];
             mb.group = group;
+            mb.macro = macro->name_;
+            mb.x = comp->x_;   // ★ 直接用 component 的座標
+            mb.y = comp->y_;
             mb.bits.push_back({ comp->name_, comp->x_, comp->y_ });
         }
         else if (isSingleBitMacro(macro)) {

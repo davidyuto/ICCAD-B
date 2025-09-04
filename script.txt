@@ -1,5 +1,0 @@
-testcase2:
-./cadb_1075_final   -weight testcase2/testcase2_weight   -lib testcase3/snps25hopt_base_ff0p88v25c.lib testcase3/snps25lopt_base_ff0p88v25c.lib testcase3/snps25ropt_base_ff0p88v25c.lib testcase3/snps25slopt_base_ff0p88v25c.lib   -lef testcase3/snps25hopt.lef testcase3/snps25lopt.lef testcase3/snps25ropt.lef testcase3/snps25slopt.lef   -sdc testcase2/testcase2.sdc   -v testcase2/testcase2.v   -def testcase2/testcase2.def   -out cadb_1075
-
-testcase3:
-./cadb_1075_final   -weight testcase3/testcase3_weight   -lib testcase3/snps25hopt_base_ff0p88v25c.lib testcase3/snps25lopt_base_ff0p88v25c.lib testcase3/snps25ropt_base_ff0p88v25c.lib testcase3/snps25slopt_base_ff0p88v25c.lib   -lef testcase3/snps25hopt.lef testcase3/snps25lopt.lef testcase3/snps25ropt.lef testcase3/snps25slopt.lef   -sdc testcase3/testcase3.sdc   -v testcase3/testcase3.v   -def testcase3/testcase3.def   -out cadb_1075

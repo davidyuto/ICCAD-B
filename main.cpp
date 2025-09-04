@@ -62,15 +62,33 @@ int main(int argc, char** argv) {
         ldp.read_def(def);
     }
 
+        //---- 獲取 blockages ----
+    auto& d = def::Def::get_instance();
+    const auto& blockages = d.get_blockages();
+    if(!blockages.empty()){
+        cout << "Found " << blockages.size() << " blockages:" << endl;
+        int placement_count = 0;
+        int layer_count = 0;
+        for (const auto& blockage : blockages) {
+            if (blockage->type_ == def::BlockageType::PLACEMENT) {
+                placement_count++;
+            } else {
+                layer_count++;
+                if (blockage->spacing_ > 0) {
+                }
+            }
+        }
+    }
+
     // === 讀取 .v ===
     cout << "Reading VERILOG file: " << v_files[0] << "\n";
     auto design = vparse::parse_verilog(v_files[0]);
-    // cout << "Test file" << v_files[1] << "\n";
-    // auto design2 = vparse::parse_verilog(v_files[1]);
     auto out_v = out_name + ".v";
 
     // === 讀取 .lib ===
-    // LibParser lib;
+    LibParser lib;
+
+    // 若提供 .lib，讀進來覆寫/補充（可選）
     // for (const auto& libfile : lib_files) {
     //     cout << "Reading LIB file: " << libfile << "\n";
     //     if (!lib.loadLib(libfile)) {
@@ -78,24 +96,6 @@ int main(int argc, char** argv) {
     //         return 1;
     //     }
     // }
-
-    LibParser lib;
-
-    // 嘗試先讀快取
-    if (!lib.loadCache("ff_cache.txt")) {
-        // == 沒有快取，才讀真實 .lib ==
-        for (const auto& libfile : lib_files) {
-            cout << "Reading LIB file: " << libfile << "\n";
-            if (!lib.loadLib(libfile)) {
-                cerr << "[Error] Failed to load " << libfile << "\n";
-                return 1;
-            }
-        }
-        // 測試時想加速：dump 一份快取出來
-        lib.dumpCache("ff_cache.txt");
-    } else {
-        cout << "[Info] Using cached FF power/area data.\n";
-    }
 
 
     ldp.fillFlipFlopNets();
@@ -160,10 +160,6 @@ int main(int argc, char** argv) {
     Input input;                     // 自動吃 last_banking_result
     Legalizer legalizer(&input);
     auto result = legalizer.solve(); // 得到結果 writer
-
-    // === Write Result ===
-    // result->write("output.txt"); 
-
 
     // ============ 處理 .v檔 ============
     std::vector<SimpleGroup> sgroups;

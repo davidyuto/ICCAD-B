@@ -9,7 +9,10 @@ struct FFPowerArea {
 
 class LibParser {
 public:
-    // 載入單一 .lib
+    // 啟動時先用內建表初始化（硬寫）
+    LibParser();
+
+    // 仍保留：載入單一 .lib，解析到的 FF 會覆寫/補充 ff_
     bool loadLib(const std::string& path);
 
     // 查詢：若查不到回傳 {0,0}
@@ -17,17 +20,13 @@ public:
 
     // 全部 FF 對照表：cell_name -> {area, power}
     const std::unordered_map<std::string, FFPowerArea>& table() const { return ff_; }
-    void dumpCache(const std::string& path) const;
-
-    // 新增：從快取檔載入 (失敗回 false)
-    bool loadCache(const std::string& path);
 
 private:
-    std::unordered_map<std::string, FFPowerArea> ff_; // 只存 FF（FSDN/LSRDPQ/LSRD）
+    std::unordered_map<std::string, FFPowerArea> ff_; // 只存 FF（FSDN/LSRDPQ）
 
+    // 解析 .lib 用到的小工具
     static void stripComments(std::string& s);
-    static bool isFFName(const std::string& cellName); // 名稱含 FSDN 或 LSRDPQ/LSRD 即視為 FF
-
+    static bool isFFName(const std::string& cellName); // 名稱在白名單即視為 FF
     bool parseOneFile(const std::string& path);
 
     // 小工具：把一串 "values(...)"（可能含多行與反斜線續行）裡的數字抽出並追加到 sum/cnt

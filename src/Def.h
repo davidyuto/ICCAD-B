@@ -31,6 +31,7 @@ struct Wire;
 struct Connection;
 struct Net;
 struct SpecialNet;
+struct Blockage;
 
 // Alias to basic data structures
 using RowPtr          = shared_ptr<Row>;
@@ -45,6 +46,7 @@ using WireSegmentPtr  = shared_ptr<WireSegment>;
 using ConnectionPtr   = shared_ptr<Connection>;
 using NetPtr          = shared_ptr<Net>;
 using SpecialNetPtr   = shared_ptr<SpecialNet>;
+using BlockagePtr = shared_ptr<Blockage>;
 
 // Some containers
 using RowVec          = vector<RowPtr>;
@@ -54,6 +56,7 @@ using ComponentUMap   = unordered_map<string, ComponentPtr>;
 using PinUMap         = unordered_map<string, PinPtr>;
 using NetUMap         = unordered_map<string, NetPtr>;
 using SpecialNetUMap  = unordered_map<string, SpecialNetPtr>;
+using BlockageVec = vector<BlockagePtr>;
 
 ostream& operator<< (ostream& os, const Row&);
 ostream& operator<< (ostream& os, const Track&);
@@ -65,6 +68,7 @@ ostream& operator<< (ostream& os, const Wire&);
 ostream& operator<< (ostream& os, const WireSegment&);
 ostream& operator<< (ostream& os, const Connection&);
 ostream& operator<< (ostream& os, const Net&);
+ostream& operator<< (ostream& os, const Blockage&);
 
 /**
  * A class to represent a row.
@@ -233,6 +237,28 @@ struct Net
     vector<ViaPtr> vias_;
 };
 
+// 添加 blockage 類型枚舉
+enum class BlockageType {
+    PLACEMENT,
+    LAYER
+};
+
+// 添加 Blockage 結構體定義
+struct Blockage {
+    BlockageType type_;
+    string layer_name_;      // 只對 LAYER blockage 有效
+    int spacing_;            // SPACING 值，默認為 0
+    
+    // 矩形區域
+    int lx_;
+    int ly_;
+    int ux_;
+    int uy_;
+    
+    Blockage() : type_(BlockageType::PLACEMENT), spacing_(0), 
+                 lx_(0), ly_(0), ux_(0), uy_(0) {}
+};
+
 
 /**
  * A special net.
@@ -260,6 +286,7 @@ public:
     const PinUMap& get_pin_umap () const;
     const NetUMap& get_net_umap () const;
     const SpecialNetUMap& get_special_net_umap () const;
+    const BlockageVec& get_blockages() const;
 
     NetPtr get_net (string name);
     ComponentPtr get_component (string name);
@@ -308,6 +335,8 @@ public:
     static int set_net (defrCallbackType_e, defiNet*, defiUserData);
     static int set_special_net_start (defrCallbackType_e, int, defiUserData);
     static int set_special_net (defrCallbackType_e, defiNet*, defiUserData);
+    static int set_blockage_start (defrCallbackType_e, int, defiUserData);
+    static int set_blockage (defrCallbackType_e, defiBlockage*, defiUserData);
 
 private:
     DefParser () = default;

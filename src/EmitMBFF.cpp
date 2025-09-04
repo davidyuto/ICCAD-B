@@ -34,6 +34,10 @@ static bool icontains(const std::string& s, const char* key){
     return it != s.end();
 }
 
+static inline bool is_unconn(const std::string& s){
+    return s == "UNCONNECTED"; // 只針對預設字串，不影響真正的 net（例如 SYNOPSYS_UNCONNECTED_303）
+}
+
 // --- family 判斷（先判 FSDNQ 再判 FSDN，避免 FSDNQ 被誤判為 FSDN） ---
 enum class Family { LSRDPQ, FSDNQ, FSDN, OTHER };
 static Family family_of(const std::string& master){
@@ -77,30 +81,33 @@ static std::string emit_single_ff(const std::string& master,
     bool need_qn   = family_has_qn(fam);
     bool need_vddr = (fam == Family::LSRDPQ);
 
-    auto ck = find_net(p2n, {"CK","CLK","CP","C"}, "clk");
-    auto d  = find_net(p2n, {"D"},  "VSS");
-    auto q  = find_net(p2n, {"Q"},  "UNCONNECTED");
-    auto qn = find_net(p2n, {"QN"}, "UNCONNECTED");
-    auto se = find_net(p2n, {"SE"}, "VSS");
-    auto si = find_net(p2n, {"SI"}, "VSS");
+    auto ck   = find_net(p2n, {"CK","CLK","CP","C"}, "clk");
+    auto d    = find_net(p2n, {"D"},  "VSS");
+    auto q    = find_net(p2n, {"Q"},  "UNCONNECTED");
+    auto qn   = find_net(p2n, {"QN"}, "UNCONNECTED");
+    auto se   = find_net(p2n, {"SE"}, "VSS");
+    auto si   = find_net(p2n, {"SI"}, "VSS");
+    auto vddr = find_net(p2n, {"VDDR"}, "VDDR");
+    auto vdd  = find_net(p2n, {"VDD"},  "VDD");
+    auto vss  = find_net(p2n, {"VSS"},  "VSS");
 
     os << master << " " << new_inst << " (\n";
     os << "  .CK ( "  << ck << " ),\n";
     os << "  .D  ( "  << d  << " ),\n";
-    os << "  .Q  ( "  << q  << " ),\n";
-    if (need_qn) {
-        os << "  .QN ( " << qn << " ),\n";
-    }
+    if (!is_unconn(q))  os << "  .Q  ( "  << q  << " ),\n";
+    if (need_qn && !is_unconn(qn)) os << "  .QN ( " << qn << " ),\n";
     os << "  .SE ( "  << se << " ),\n";
     os << "  .SI ( "  << si << " ),\n";
 
     if (need_vddr)
-        os << "  .VDDR ( VDDR ), .VDD ( VDD ), .VSS ( VSS )\n";
+        os << "  .VDDR ( " << vddr << " ), .VDD ( " << vdd << " ), .VSS ( " << vss << " )\n";
     else
-        os << "  .VDD ( VDD ), .VSS ( VSS )\n";
+        os << "  .VDD ( " << vdd  << " ), .VSS ( " << vss << " )\n";
+
     os << ");\n";
     return os.str();
 }
+
 
 // === 多位元 FSDN：D/Q/QN 以 0-based：D0.. / Q0.. / QN0..；SE/SI 強制接 VSS ===
 static std::string emit_fsdn(const std::string& master,
@@ -108,28 +115,34 @@ static std::string emit_fsdn(const std::string& master,
                              const std::vector<const FFInstance*>& mems){
     std::ostringstream os;
     const auto* leader = mems.front();
-    auto ck = find_net(leader->pin2net, {"CK","CLK","CP","C"}, "clk");
+
+    auto ck  = find_net(leader->pin2net, {"CK","CLK","CP","C"}, "clk");
+    auto se  = find_net(leader->pin2net, {"SE"}, "VSS");
+    auto si  = find_net(leader->pin2net, {"SI"}, "VSS");
+    auto vdd = find_net(leader->pin2net, {"VDD"}, "VDD");
+    auto vss = find_net(leader->pin2net, {"VSS"}, "VSS");
 
     os << master << " " << new_inst << " (\n";
     os << "  .CK ( " << ck << " ),\n";
 
-    // D0.. / Q0.. / QN0..
     for (int i=0;i<(int)mems.size();++i)
         os << "  .D" << i  << " ( " << find_net(mems[i]->pin2net, {"D"}, "VSS") << " ),\n";
-    for (int i=0;i<(int)mems.size();++i)
-        os << "  .Q" << i  << " ( " << find_net(mems[i]->pin2net, {"Q"}, "UNCONNECTED") << " ),\n";
-    for (int i=0;i<(int)mems.size();++i)
-        os << "  .QN" << i << " ( " << find_net(mems[i]->pin2net, {"QN"}, "UNCONNECTED") << " ),\n";
+    for (int i=0;i<(int)mems.size();++i){
+        auto q  = find_net(mems[i]->pin2net, {"Q"},  "UNCONNECTED");
+        if (!is_unconn(q))   os << "  .Q"  << i << " ( " << q  << " ),\n";
+    }
+    for (int i=0;i<(int)mems.size();++i){
+        auto qn = find_net(mems[i]->pin2net, {"QN"}, "UNCONNECTED");
+        if (!is_unconn(qn))  os << "  .QN" << i << " ( " << qn << " ),\n";
+    }
 
-    // SE/SI 拉低
-    os << "  .SE ( VSS ),\n";
-    os << "  .SI ( VSS ),\n";
-
-    // 電源
-    os << "  .VDD ( VDD ), .VSS ( VSS )\n";
+    os << "  .SE ( " << se << " ),\n";
+    os << "  .SI ( " << si << " ),\n";
+    os << "  .VDD ( " << vdd << " ), .VSS ( " << vss << " )\n";
     os << ");\n";
     return os.str();
 }
+
 
 // === 多位元 LSRDPQ：1-based 腳位：D1.. / Q1.. / QN1..；含 VDDR ===
 static std::string emit_lsrdpq(const std::string& master,
@@ -137,7 +150,11 @@ static std::string emit_lsrdpq(const std::string& master,
                                const std::vector<const FFInstance*>& mems){
     std::ostringstream os;
     const auto* leader = mems.front();
-    auto ck = find_net(leader->pin2net, {"CK","CLK","CP","C"}, "clk");
+
+    auto ck   = find_net(leader->pin2net, {"CK","CLK","CP","C"}, "clk");
+    auto vddr = find_net(leader->pin2net, {"VDDR"}, "VDDR");
+    auto vdd  = find_net(leader->pin2net, {"VDD"},  "VDD");
+    auto vss  = find_net(leader->pin2net, {"VSS"},  "VSS");
 
     os << master << " " << new_inst << " (\n";
     os << "  .CK ( " << ck << " ),\n";
@@ -145,14 +162,19 @@ static std::string emit_lsrdpq(const std::string& master,
     for (int i=0;i<(int)mems.size();++i) {
         int k = i+1;
         os << "  .D"  << k << " ( " << find_net(mems[i]->pin2net, {"D"},  "VSS") << " ),\n";
-        os << "  .Q"  << k << " ( " << find_net(mems[i]->pin2net, {"Q"},  "UNCONNECTED") << " ),\n";
-        os << "  .QN" << k << " ( " << find_net(mems[i]->pin2net, {"QN"}, "UNCONNECTED") << " ),\n";
+
+        auto q  = find_net(mems[i]->pin2net, {"Q"},  "UNCONNECTED");
+        if (!is_unconn(q))  os << "  .Q"  << k << " ( " << q  << " ),\n";
+
+        auto qn = find_net(mems[i]->pin2net, {"QN"}, "UNCONNECTED");
+        if (!is_unconn(qn)) os << "  .QN" << k << " ( " << qn << " ),\n";
     }
 
-    os << "  .VDDR ( VDDR ), .VDD ( VDD ), .VSS ( VSS )\n";
+    os << "  .VDDR ( " << vddr << " ), .VDD ( " << vdd << " ), .VSS ( " << vss << " )\n";
     os << ");\n";
     return os.str();
 }
+
 
 void write_banked_two_types(const VerilogDesign& design,
                             const std::vector<SimpleGroup>& groups,

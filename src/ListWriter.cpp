@@ -77,15 +77,33 @@ void writeListFile(const Banking& banking,
     // ================= Part 2: Operation Log =================
     fout << "OPERATION " << groups.size() << "\n";
     for (const auto& g : groups) {
-        fout << "create_multibit { ";
+        if (g.bits.size() > 1) {
+        // === create_multibit ===
+        fout << "create_multibit {";
         for (auto* ff : g.bits) {
-            fout << "{" << ff->name
-                 << " " << ff->macro << " 1} ";
+            fout << " {" << ff->name << " " << ff->macro << " 1}";
         }
-        fout << "{" << g.inst_name
-             << " " << g.macro << " " << g.bits.size() << "} }\n";
+        fout << " {" << g.inst_name << " " << g.macro << " " << g.bits.size() << "} }\n";
+        } 
+        else if (g.bits.size() == 1) {
+            auto* ff = g.bits[0];
+            if (g.inst_name != ff->name && g.macro != ff->macro) {
+                // case 1: 名字不同 + cell type 不同 → 兩個 operation
+                fout << "change_name {" << ff->name << " " << g.inst_name << "}\n";
+                fout << "size_cell {" << g.inst_name << " "
+                    << ff->macro << " "
+                    << g.macro << "}\n";
+            } else if (g.inst_name != ff->name) {
+                // case 2: 只有名字不同 → change_name
+                fout << "change_name {" << ff->name << " " << g.inst_name << "}\n";
+            } else if (g.macro != ff->macro) {
+                // case 3: 只有 cell type 不同 → size_cell
+                fout << "size_cell {" << g.inst_name << " "
+                    << ff->macro << " "
+                    << g.macro << "}\n";
+            }
+        }
     }
-
     fout.close();
     std::cout << "[Output] Wrote list file: " << filename << "\n";
 }

@@ -278,56 +278,56 @@ public:
         return instances_;
     }
 
-    // 調試特定實例
-    void debugInstance(const std::string& instance_name) {
-        //std::cout << "\n=== DEBUG: Searching for instance " << instance_name << " ===" << std::endl;
+    // // 調試特定實例
+    // void debugInstance(const std::string& instance_name) {
+    //     //std::cout << "\n=== DEBUG: Searching for instance " << instance_name << " ===" << std::endl;
         
-        bool found = false;
-        for (const auto& inst : instances_) {
-            if (inst.instance_name == instance_name) {
-                //std::cout << "Found instance: " << inst.module_name 
-                        // << " " << inst.instance_name << std::endl;
-                //std::cout << "Connections:" << std::endl;
+    //     bool found = false;
+    //     for (const auto& inst : instances_) {
+    //         if (inst.instance_name == instance_name) {
+    //             std::cout << "Found instance: " << inst.module_name 
+    //                     << " " << inst.instance_name << std::endl;
+    //             std::cout << "Connections:" << std::endl;
                 
-                // for (const auto& conn : inst.connections) {
-                //     //std::cout << "  ." << conn.port_name << " ( " << conn.net_name << " )" << std::endl;
-                // }
-                found = true;
-                break;
-            }
-        }
+    //             for (const auto& conn : inst.connections) {
+    //                 //std::cout << "  ." << conn.port_name << " ( " << conn.net_name << " )" << std::endl;
+    //             }
+    //             found = true;
+    //             break;
+    //         }
+    //     }
         
-        if (!found) {
-            //std::cout << "Instance " << instance_name << " NOT FOUND!" << std::endl;
-        }
-    }
+    //     if (!found) {
+    //         //std::cout << "Instance " << instance_name << " NOT FOUND!" << std::endl;
+    //     }
+    // }
     
-    // 調試特定網路
-    void debugNet(const std::string& net_name) {
-        //std::cout << "\n=== DEBUG: Searching for net " << net_name << " ===" << std::endl;
+    // // 調試特定網路
+    // void debugNet(const std::string& net_name) {
+    //     //std::cout << "\n=== DEBUG: Searching for net " << net_name << " ===" << std::endl;
         
-        auto it = nets_.find(net_name);
-        if (it != nets_.end()) {
-            const auto& net = it->second;
-            //std::cout << "Found net: " << net.net_name << std::endl;
-            //std::cout << "Connections:" << std::endl;
+    //     auto it = nets_.find(net_name);
+    //     if (it != nets_.end()) {
+    //         const auto& net = it->second;
+    //         //std::cout << "Found net: " << net.net_name << std::endl;
+    //         //std::cout << "Connections:" << std::endl;
             
-            for (const auto& conn : net.connections) {
-                //std::cout << "  " << conn.first << "." << conn.second << std::endl;
-            }
-        } else {
-            //std::cout << "Net " << net_name << " NOT FOUND!" << std::endl;
+    //         for (const auto& conn : net.connections) {
+    //             //std::cout << "  " << conn.first << "." << conn.second << std::endl;
+    //         }
+    //     } else {
+    //         //std::cout << "Net " << net_name << " NOT FOUND!" << std::endl;
             
-            // 搜索相似的網路名稱
-            //std::cout << "Similar nets found:" << std::endl;
-            for (const auto& net_pair : nets_) {
-                if (net_pair.first.find(net_name) != std::string::npos ||
-                    net_name.find(net_pair.first) != std::string::npos) {
-                    //std::cout << "  " << net_pair.first << std::endl;
-                }
-            }
-        }
-    }
+    //         // 搜索相似的網路名稱
+    //         //std::cout << "Similar nets found:" << std::endl;
+    //         for (const auto& net_pair : nets_) {
+    //             if (net_pair.first.find(net_name) != std::string::npos ||
+    //                 net_name.find(net_pair.first) != std::string::npos) {
+    //                 //std::cout << "  " << net_pair.first << std::endl;
+    //             }
+    //         }
+    //     }
+    // }
 
     // 打印解析結果（用於調試）
     void printNets() const {
@@ -339,21 +339,21 @@ public:
         }
     }
     
-    // 統計信息
-    void printStatistics() const {
-        // std::cout << "\n=== Parser Statistics ===" << std::endl;
-        // std::cout << "Total instances: " << instances_.size() << std::endl;
-        // std::cout << "Total nets: " << nets_.size() << std::endl;
+    // // 統計信息
+    // void printStatistics() const {
+    //     // std::cout << "\n=== Parser Statistics ===" << std::endl;
+    //     // std::cout << "Total instances: " << instances_.size() << std::endl;
+    //     // std::cout << "Total nets: " << nets_.size() << std::endl;
         
-        // 統計不同模塊類型
-        std::map<std::string, int> module_count;
-        for (const auto& inst : instances_) {
-            module_count[inst.module_name]++;
-        }
+    //     // 統計不同模塊類型
+    //     std::map<std::string, int> module_count;
+    //     for (const auto& inst : instances_) {
+    //         module_count[inst.module_name]++;
+    //     }
         
-        // std::cout << "Module types:" << std::endl;
-        // for (const auto& kv : module_count) {
-        //     std::cout << "  " << kv.first << ": " << kv.second << std::endl;
-        // }
-    }
+    //     // std::cout << "Module types:" << std::endl;
+    //     // for (const auto& kv : module_count) {
+    //     //     std::cout << "  " << kv.first << ": " << kv.second << std::endl;
+    //     // }
+    // }
 };

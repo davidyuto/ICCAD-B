@@ -91,6 +91,42 @@ Input::Input() {
             blockages.emplace_back(blockage);
         }
     }
+    // === Step 4. 添加 PLACEMENT blockages ===
+    const auto& def_blockages = def_->get_blockages();
+    if(!def_blockages.empty()){
+        std::cout << "Found " << def_blockages.size() << " total blockages in DEF" << std::endl;
+
+        int placement_blockage_count = 0;
+        for (const auto& blockage : def_blockages) {
+            // 只處理 PLACEMENT 類型的 blockages
+            if (blockage->type_ == def::BlockageType::PLACEMENT) {
+                // 計算 blockage 的寬度和高度
+                int width = blockage->ux_ - blockage->lx_;
+                int height = blockage->uy_ - blockage->ly_;
+                
+                // 生成唯一的 blockage 名稱
+                std::string blockage_name = "PLACEMENT_BLOCKAGE_" + std::to_string(placement_blockage_count);
+                
+                Cell *placement_blockage = new Cell(
+                    blockage_name,
+                    width,
+                    height,
+                    blockage->lx_,  // 使用左下角作為放置位置
+                    blockage->ly_
+                );
+                
+                blockages.emplace_back(placement_blockage);
+                placement_blockage_count++;
+                
+                // std::cout << "Added PLACEMENT blockage: " << blockage_name 
+                //         << " at (" << blockage->lx_ << "," << blockage->ly_ 
+                //         << ") size " << width << "x" << height << std::endl;
+            }
+        }
+    }
+    
+
+
 
     // === Step 4. Rows ===
     auto unit = lef_->get_dbu();
