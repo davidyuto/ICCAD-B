@@ -67,189 +67,31 @@ double Banking::computeCost(const std::string& mbff_macro,
     return cost;
 }
 
-struct DPState {
-    double minCost;
-    std::vector<std::vector<int>> groups;  // 每個 group 內 FF 的 indices
-    std::vector<int> groupTypes;           // 1, 2, or 4
-};
-
-Banking::DPState Banking::findOptimalBanking(const std::vector<FlipFlop*>& ffs,
-                                             const CompatMaps& maps,
-                                             double cx, double cy) const {
-    int n = ffs.size();
-    if (n == 0) return {0.0, {}, {}};
-
-    std::vector<DPState> dp(1 << n);
-    dp[0] = {0.0, {}, {}};
-
-    std::unordered_map<int, double> groupCost;
-    std::unordered_map<int, std::string> groupMacro;
-
-    // 枚舉所有可能的 {1,2,4} group
-    for (int mask = 1; mask < (1 << n); mask++) {
-        int bitCount = __builtin_popcount(mask);
-        if (bitCount != 1 && bitCount != 2 && bitCount != 4) continue;
-
-        std::vector<FlipFlop*> group;
-        for (int i = 0; i < n; i++) {
-            if (mask & (1 << i)) {
-                group.push_back(ffs[i]);
-            }
-        }
-
-        if (bitCount == 1) {
-            // 單顆 FF：直接 fallback 為 SBFF
-            groupCost[mask] = lib_.getFFPowerArea(group[0]->macro).area +
-                            lib_.getFFPowerArea(group[0]->macro).power;
-            groupMacro[mask] = group[0]->macro;
-        } else {
-            std::string macro = pickMBFFMacro(group, maps);
-            if (!macro.empty()) {
-                double cost = computeCost(macro, group);
-                for (auto* ff : group) {
-                    double dist = std::sqrt(pow(ff->new_x - cx, 2) +
-                                            pow(ff->new_y - cy, 2));
-                    cost += dist * 0.001;
-                }
-                groupCost[mask] = cost;
-                groupMacro[mask] = macro;
-            }
-        }
-
-    }
-
-    for (int mask = 1; mask < (1 << n); mask++) {
-        dp[mask].minCost = 1e18;
-
-        for (int sub = mask; sub > 0; sub = (sub - 1) & mask) {
-            if (groupCost.count(sub) == 0) continue;
-
-            int remain = mask ^ sub;
-            double newCost = dp[remain].minCost + groupCost[sub];
-
-            if (newCost < dp[mask].minCost) {
-                DPState candidate = dp[remain];   // 拷貝已有方案
-                candidate.minCost = newCost;
-
-                std::vector<int> groupIndices;
-                for (int i = 0; i < n; i++) {
-                    if (sub & (1 << i)) groupIndices.push_back(i);
-                }
-                candidate.groups.push_back(groupIndices);
-                candidate.groupTypes.push_back(__builtin_popcount(sub));
-
-                dp[mask] = std::move(candidate);  // 更新最佳解
-            }
-
-        }
-    }
-
-    return dp[(1 << n) - 1];
-}
-
-
-
 Banking::Banking(std::vector<FlipFlop>& ffs, const LibParser& lib)
 : ffs_(ffs), lib_(lib) {}
 
-
-
-void Banking::debugClusterBanking(const CompatMaps& maps, int limit) const {
-    std::cout << "\n[Debug] Show up to " << limit << " clusters banking process with cost breakdown:\n";
-    int shown = 0;
-    for (const auto& c : clusters_) {
-        if (shown++ >= limit) break;
-
-        std::cout << "\nCluster ID=" << c.getID()
-                  << " size=" << c.getFFs().size()
-                  << " center=(" << c.getCenterX()
-                  << "," << c.getCenterY() << ")\n";
-
-        // 列出 FF
-        for (auto* ff : c.getFFs()) {
-            std::cout << "  FF " << ff->name
-                      << " macro=" << ff->macro
-                      << " (" << ff->new_x << "," << ff->new_y << ")\n";
-        }
-
-        // 嘗試 Banking (只展示 2-bit 和 4-bit 組合)
-        auto tryBank = [&](int bits) {
-            if ((int)c.getFFs().size() >= bits) {
-                std::vector<FlipFlop*> sub(c.getFFs().begin(),
-                                           c.getFFs().begin() + bits);
-                std::string mb = pickMBFFMacro(sub, maps);
-                if (!mb.empty()) {
-                    FFPowerArea info = lib_.getFFPowerArea(mb);
-
-                    // 計算 disp
-                    int cx = 0, cy = 0;
-                    for (auto* ff : sub) { cx += ff->new_x; cy += ff->new_y; }
-                    cx /= (int)sub.size(); cy /= (int)sub.size();
-                    double disp = 0.0;
-                    for (auto* ff : sub) {
-                        double dx = ff->new_x - cx;
-                        double dy = ff->new_y - cy;
-                        disp += std::sqrt(dx*dx + dy*dy);
-                    }
-
-                    double cost = disp * 0.5 + info.area + info.power;
-
-                    std::cout << "  Try " << bits << "-bit → " << mb
-                              << "  area=" << info.area
-                              << "  power=" << info.power
-                              << "  disp=" << disp
-                              << "  => cost=" << cost << "\n";
-                }
-            }
-        };
-
-        tryBank(2);
-        tryBank(4);
-    }
-}
-
-
-
 std::string Banking::pickMBFFMacro(const std::vector<FlipFlop*>& bits,
                                    const CompatMaps& maps) const {
+    if (bits.empty()) return "";
+
     size_t B = bits.size();
-    if (B != 2 && B != 4) return "";
+    const std::string& macro = bits[0]->macro; // 取第一個 FF 的 macro 名稱
 
-    std::unordered_set<std::string> common;
-    bool first = true;
-    for (auto* ff : bits) {
-        const auto& cands = CompatParser::single_to_multi(maps, ff->macro);
-        if (cands.empty()) return "";
-        if (first) {
-            common.insert(cands.begin(), cands.end());
-            first = false;
-        } else {
-            std::unordered_set<std::string> tmp;
-            for (auto& c : cands) if (common.count(c)) tmp.insert(c);
-            common.swap(tmp);
-        }
-    }
-    if (common.empty()) return "";
+    bool isFSDN   = (macro.find("FSDN")   != std::string::npos);
+    bool isLSRDPQ = (macro.find("LSRDPQ") != std::string::npos);
 
-    // 過濾符合 2/4-bit 的名稱
-    std::vector<std::string> filtered;
-    for (auto& mb : common) {
-        if ((B == 2 && mb.find("2") != std::string::npos) ||
-            (B == 4 && mb.find("4") != std::string::npos)) {
-            filtered.push_back(mb);
-        }
+    if (isFSDN) {
+        if (B == 1) return "SNPSSLOPT25_FSDN_V2_1";
+        if (B == 2) return "SNPSSLOPT25_FSDN2_V2_1";
+        if (B == 4) return "SNPSSLOPT25_FSDN4_V2_1";
+    } 
+    else if (isLSRDPQ) {
+        if (B == 1) return "SNPSSLOPT25_LSRDPQ_1";
+        if (B == 4) return "SNPSSLOPT25_LSRDPQ4_1";
     }
-    if (filtered.empty()) filtered.assign(common.begin(), common.end());
 
-    std::string best;
-    double bestCost = std::numeric_limits<double>::max();
-    for (auto& mb : filtered) {
-        double c = computeCost(mb, bits);
-        if (c < bestCost) { bestCost = c; best = mb; }
-    }
-    return best;
+    return "";
 }
-
 
 void Banking::mergeCluster(const CompatMaps& maps) {
     int before_single = 0;
@@ -323,11 +165,11 @@ void Banking::run_big(const CompatMaps& maps,
     mbff_groups_.clear();
 
     // === Step 0: 如果 forceK > 0，先用這個 K 重建 bandwidth ===
-    if (forceK > 0) {
-        my_lefdef::FlipFlopClustering cl(ffs_);
-        cl.buildRTree();
-        cl.initKNN(forceK, 4000*4000);
-        cl.shiftAllFlipFlops();
+    // if (forceK > 0) {
+    my_lefdef::FlipFlopClustering cl(ffs_);
+    cl.buildRTree();
+    cl.initKNN(forceK, 4000*4000);
+    cl.shiftAllFlipFlops();
 
         const auto& ffs_new = cl.getFFs();
         for (size_t i = 0; i < ffs_.size(); i++) {
@@ -336,7 +178,7 @@ void Banking::run_big(const CompatMaps& maps,
             ffs_[i].bandwidth  = ffs_new[i].bandwidth;
             ffs_[i].isShifting = ffs_new[i].isShifting;
         }
-    }
+    // }
 
     // === Step 1: 分群 (Clock + Hierarchy) ===
     std::unordered_map<std::string, std::vector<int>> by_group;
@@ -383,6 +225,7 @@ void Banking::run_big(const CompatMaps& maps,
 
     if (!doBanking) return;
 
+
     auto& ldp = my_lefdef::LefDefParser::get_instance();
 
     const double displacement_threshold = 2500.0;
@@ -413,11 +256,23 @@ void Banking::run_big(const CompatMaps& maps,
                 g.place_y = c.getCenterY();
                 g.cost    = computeCost(mb, sub);
                 g.inst_name = sub[0]->name + "_mb";
-                g.area = lib_.getFFPowerArea(mb).area;
+
+                // === Step 4: 填充面積與尺寸 ===
+                auto pa = lib_.getFFPowerArea(mb);
+                g.area = pa.area;
+
+                auto comp = def::Def::get_instance().get_component(sub[0]->name);
+                if (comp && comp->lef_macro_) {
+                    g.width  = comp->lef_macro_->size_x_;
+                    g.height = comp->lef_macro_->size_y_;
+                } else {
+                    g.width = g.height = 0.0;
+                }
 
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub) usedFF.insert(ff);
             }
+
         }
 
         // ---- 特判 3 → 2+1 ----
@@ -429,18 +284,30 @@ void Banking::run_big(const CompatMaps& maps,
             std::string mb = pickMBFFMacro(sub2, maps);
             if (!mb.empty()) {
                 MBFFGroup g;
-                g.id = gid++;
-                g.macro = mb;
-                g.bits = sub2;
+                g.id      = gid++;
+                g.macro   = mb;
+                g.bits    = sub2;
                 g.place_x = c.getCenterX();
                 g.place_y = c.getCenterY();
-                g.cost = computeCost(mb, sub2);
+                g.cost    = computeCost(mb, sub2);
                 g.inst_name = sub2[0]->name + "_mb";
-                g.area = lib_.getFFPowerArea(mb).area;
+
+                // === Step 4: 填充面積與尺寸 ===
+                auto pa = lib_.getFFPowerArea(mb);
+                g.area = pa.area;
+
+                auto comp = def::Def::get_instance().get_component(sub2[0]->name);
+                if (comp && comp->lef_macro_) {
+                    g.width  = comp->lef_macro_->size_x_;
+                    g.height = comp->lef_macro_->size_y_;
+                } else {
+                    g.width = g.height = 0.0;
+                }
 
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub2) usedFF.insert(ff);
             }
+
             n = (int)bits.size();
         }
 
@@ -453,18 +320,30 @@ void Banking::run_big(const CompatMaps& maps,
             std::string mb = pickMBFFMacro(sub, maps);
             if (!mb.empty()) {
                 MBFFGroup g;
-                g.id = gid++;
-                g.macro = mb;
-                g.bits = sub;
+                g.id      = gid++;
+                g.macro   = mb;
+                g.bits    = sub;
                 g.place_x = c.getCenterX();
                 g.place_y = c.getCenterY();
-                g.cost = computeCost(mb, sub);
+                g.cost    = computeCost(mb, sub);
                 g.inst_name = sub[0]->name + "_mb";
-                g.area = lib_.getFFPowerArea(mb).area;
+
+                // === Step 4: 填充面積與尺寸 ===
+                auto pa = lib_.getFFPowerArea(mb);
+                g.area = pa.area;
+
+                auto comp = def::Def::get_instance().get_component(sub[0]->name);
+                if (comp && comp->lef_macro_) {
+                    g.width  = comp->lef_macro_->size_x_;
+                    g.height = comp->lef_macro_->size_y_;
+                } else {
+                    g.width = g.height = 0.0;
+                }
 
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub) usedFF.insert(ff);
             }
+
         }
 
         // ---- 單顆 (可能換 cell type) ----
@@ -472,39 +351,31 @@ void Banking::run_big(const CompatMaps& maps,
             FlipFlop* ff = bits.back();
             bits.pop_back();
 
-            // 原始 macro
-            auto best_macro = ff->macro;
-            auto best_info  = lib_.getFFPowerArea(best_macro);
-            double best_cost = best_info.area + best_info.power;
-
-            // 嘗試找到同 family 更好的 single-bit
-            for (const auto& cand : CompatParser::single_ff_set()) {
-                if (CompatParser::family_of(cand) != CompatParser::family_of(ff->macro))
-                    continue;
-                auto info = lib_.getFFPowerArea(cand);
-                if (info.area <= 0 || info.power <= 0) continue;
-
-                double cost = info.area + info.power;
-                if (cost < best_cost) {
-                    best_cost  = cost;
-                    best_macro = cand;
-                }
-            }
-
             MBFFGroup g;
             g.id      = gid++;
-            g.macro   = best_macro;       // 如果有找到更好 → 換 cell type
-            g.bits.clear();
-            g.bits.push_back(ff);
+            g.macro   = ff->macro;    // 直接沿用 pickMBFFMacro 給的 macro
+            g.bits    = { ff };
             g.place_x = ff->new_x;
             g.place_y = ff->new_y;
-            g.cost    = best_cost;
+            g.cost    = computeCost(g.macro, g.bits);
             g.inst_name = ff->name + "_sb";
-            g.area = lib_.getFFPowerArea(best_macro).area;
+
+            // === Step 4: 填充面積與尺寸 ===
+            auto pa = lib_.getFFPowerArea(g.macro);
+            g.area = pa.area;
+
+            auto comp = def::Def::get_instance().get_component(ff->name);
+            if (comp && comp->lef_macro_) {
+                g.width  = comp->lef_macro_->size_x_;
+                g.height = comp->lef_macro_->size_y_;
+            } else {
+                g.width = g.height = 0.0;
+            }
 
             mbff_groups_.push_back(std::move(g));
             usedFF.insert(ff);
         }
+
     }
 
     // ---- 加入 DEF 裡已有的 MBFF ----

@@ -57,14 +57,15 @@ Input::Input() {
 
     // === Step 1. 取得 Banking 結果 (mbff_groups_) ===
     const auto& mbff_groups = my_lefdef::last_banking_result; // ★ 由 Banking::run_big() 更新
+    auto unit = lef_->get_dbu();  // 單位
 
     // === Step 2. 建立 cells (只吃 Banking MBFFGroup) ===
     cells.clear();
     for (const auto& g : mbff_groups) {
         Cell *cell = new Cell(
             g.inst_name,
-            g.width,
-            g.height,
+            g.width * unit,
+            g.height * unit,
             g.place_x,
             g.place_y
         );
@@ -83,8 +84,8 @@ Input::Input() {
         if(ff_names.find(comp_name) == ff_names.end()) {
             Cell *blockage = new Cell(
                 comp_ptr->name_,     // 或 comp_name
-                comp_ptr->lef_macro_->size_x_,    // 需要根據實際Component結構調整
-                comp_ptr->lef_macro_->size_y_,   // 需要根據實際Component結構調整
+                comp_ptr->lef_macro_->size_x_ * unit,    // 需要根據實際Component結構調整
+                comp_ptr->lef_macro_->size_y_ * unit,   // 需要根據實際Component結構調整
                 comp_ptr->x_,        // 需要根據實際Component結構調整
                 comp_ptr->y_         // 需要根據實際Component結構調整
             );
@@ -124,12 +125,8 @@ Input::Input() {
             }
         }
     }
-    
-
-
 
     // === Step 4. Rows ===
-    auto unit = lef_->get_dbu();
     rows.clear();
     auto& ROWS = def_->get_rows();
     for(auto const& R : ROWS){
