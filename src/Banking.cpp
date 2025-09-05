@@ -261,12 +261,13 @@ void Banking::run_big(const CompatMaps& maps,
                 auto pa = lib_.getFFPowerArea(mb);
                 g.area = pa.area;
 
-                auto comp = def::Def::get_instance().get_component(sub[0]->name);
-                if (comp && comp->lef_macro_) {
-                    g.width  = comp->lef_macro_->size_x_;
-                    g.height = comp->lef_macro_->size_y_;
+                auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
+                if (lef_macro) {
+                    g.width  = lef_macro->size_x_;
+                    g.height = lef_macro->size_y_;
                 } else {
                     g.width = g.height = 0.0;
+                    std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
                 }
 
                 mbff_groups_.push_back(std::move(g));
@@ -296,12 +297,13 @@ void Banking::run_big(const CompatMaps& maps,
                 auto pa = lib_.getFFPowerArea(mb);
                 g.area = pa.area;
 
-                auto comp = def::Def::get_instance().get_component(sub2[0]->name);
-                if (comp && comp->lef_macro_) {
-                    g.width  = comp->lef_macro_->size_x_;
-                    g.height = comp->lef_macro_->size_y_;
+                auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
+                if (lef_macro) {
+                    g.width  = lef_macro->size_x_;
+                    g.height = lef_macro->size_y_;
                 } else {
                     g.width = g.height = 0.0;
+                    std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
                 }
 
                 mbff_groups_.push_back(std::move(g));
@@ -332,12 +334,13 @@ void Banking::run_big(const CompatMaps& maps,
                 auto pa = lib_.getFFPowerArea(mb);
                 g.area = pa.area;
 
-                auto comp = def::Def::get_instance().get_component(sub[0]->name);
-                if (comp && comp->lef_macro_) {
-                    g.width  = comp->lef_macro_->size_x_;
-                    g.height = comp->lef_macro_->size_y_;
+                auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
+                if (lef_macro) {
+                    g.width  = lef_macro->size_x_;
+                    g.height = lef_macro->size_y_;
                 } else {
                     g.width = g.height = 0.0;
+                    std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
                 }
 
                 mbff_groups_.push_back(std::move(g));
@@ -364,12 +367,13 @@ void Banking::run_big(const CompatMaps& maps,
             auto pa = lib_.getFFPowerArea(g.macro);
             g.area = pa.area;
 
-            auto comp = def::Def::get_instance().get_component(ff->name);
-            if (comp && comp->lef_macro_) {
-                g.width  = comp->lef_macro_->size_x_;
-                g.height = comp->lef_macro_->size_y_;
+            auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
+            if (lef_macro) {
+                g.width  = lef_macro->size_x_;
+                g.height = lef_macro->size_y_;
             } else {
                 g.width = g.height = 0.0;
+                std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
             }
 
             mbff_groups_.push_back(std::move(g));

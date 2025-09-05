@@ -66,7 +66,6 @@ int main(int argc, char** argv) {
     auto& d = def::Def::get_instance();
     const auto& blockages = d.get_blockages();
     if(!blockages.empty()){
-        cout << "Found " << blockages.size() << " blockages" << endl;
         int placement_count = 0;
         int layer_count = 0;
         for (const auto& blockage : blockages) {

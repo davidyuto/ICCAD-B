@@ -6,11 +6,11 @@ TARGET = cadb_1075_final
 
 # === 編譯模式 ===
 ifeq ($(DEBUG), 1)
-  CXXFLAGS = -g -O0 -DDEBUG -std=c++17
+  CXXFLAGS = -g -O0 -DDEBUG -std=c++11
 else ifeq ($(UNIT_TEST), 1)
-  CXXFLAGS = -g -O0 -DUNIT_TEST -DDEBUG -std=c++17
+  CXXFLAGS = -g -O0 -DUNIT_TEST -DDEBUG -std=c++11
 else
-  CXXFLAGS = -O3 -std=c++17
+  CXXFLAGS = -O3 -std=c++11
 endif
 
 # 自動相依檔
