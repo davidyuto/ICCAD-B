@@ -62,6 +62,10 @@ void writeListFile(const Banking& banking,
                 else if (pin == "SE" || pin == "SI" ||
                         pin == "RESET" || pin == "SET")
                     tgt_pin = pin;
+                else if (pin == "VDD" || pin == "VSS") {
+                    // Power / Ground pin 保持原名對應
+                    tgt_pin = pin;
+                }
                 else
                     continue; // 其他暫時略過
 
@@ -69,6 +73,7 @@ void writeListFile(const Banking& banking,
                 fout << ff->name << "/" << pin
                     << " map " << g.inst_name << "/" << tgt_pin << "\n";
             }
+
         }
     }
 

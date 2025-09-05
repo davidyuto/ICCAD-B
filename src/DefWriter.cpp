@@ -319,27 +319,31 @@ static void write_nets (def::Def* def)
 // 與 DefWriter 整合的輔助函數
 void writeNetsFromVerilog(def::Def* def, const VerilogParser& parser) {
     const auto& nets = parser.getNets();
-    std::cout << "[Debug] Writing " << nets.size() << " nets from VerilogParser" << std::endl;
-    
+
     auto status = defwStartNets(nets.size());
     CHECK_STATUS(status);
-    
+
     for (const auto& net_pair : nets) {
         const auto& net = net_pair.second;
-        
+
         status = defwNet(net.net_name.c_str());
         CHECK_STATUS(status);
-        
+
+        // 嘗試設置格式選項（如果支援）
+        //defwAddIndent();  // 增加縮排
+
         for (const auto& conn : net.connections) {
-            //conn.first = instance_name, conn.second = port_name
             status = defwNetConnection(conn.first.c_str(), conn.second.c_str(), 0);
             CHECK_STATUS(status);
         }
-        
+
+        status = defwNetUse("SIGNAL");
+        CHECK_STATUS(status);
+
         status = defwNetEndOneNet();
         CHECK_STATUS(status);
     }
-    
+
     status = defwEndNets();
     CHECK_STATUS(status);
 }
