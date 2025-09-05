@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include "Globals.h"
 
 namespace my_lefdef {
 std::vector<MBFFGroup> last_banking_result;
@@ -81,10 +82,16 @@ std::string Banking::pickMBFFMacro(const std::vector<FlipFlop*>& bits,
     bool isLSRDPQ = (macro.find("LSRDPQ") != std::string::npos);
 
     if (isFSDN) {
-        if (B == 1) return "SNPSSLOPT25_FSDN_V2_1";
-        if (B == 2) return "SNPSSLOPT25_FSDN2_V2_1";
-        if (B == 4) return "SNPSSLOPT25_FSDN4_V2_1";
-    } 
+        if (g_testcase_id == 1) {
+            if (B == 1) return "SNPSSLOPT25_FSDN_V2_1";
+            if (B == 2) return "SNPSHOPT25_FSDN2_V2_0P5";
+            if (B == 4) return "SNPSHOPT25_FSDN4_V2_0P5";
+        } else { // testcase2, 3
+            if (B == 1) return "SNPSSLOPT25_FSDN_V2_1";
+            if (B == 2) return "SNPSSLOPT25_FSDN2_V2_1";
+            if (B == 4) return "SNPSSLOPT25_FSDN4_V2_1";
+        }
+    }
     else if (isLSRDPQ) {
         if (B == 1) return "SNPSSLOPT25_LSRDPQ_1";
         if (B == 4) return "SNPSSLOPT25_LSRDPQ4_1";

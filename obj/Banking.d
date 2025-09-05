@@ -24,7 +24,7 @@ obj/Banking.o: src/Banking.cpp src/Banking.h src/Cluster.h \
  parser/include/def/defiBlockage.hpp parser/include/def/defiSlot.hpp \
  parser/include/def/defiFill.hpp parser/include/def/defiNonDefault.hpp \
  parser/include/def/defiPropType.hpp src/CompatParser.h src/MeanShift.h \
- src/LibParser.h src/VerilogParser.h src/CheckFF.h
+ src/LibParser.h src/VerilogParser.h src/CheckFF.h src/Globals.h
 src/Banking.h:
 src/Cluster.h:
 src/LefDefParser.h:
@@ -82,3 +82,4 @@ src/MeanShift.h:
 src/LibParser.h:
 src/VerilogParser.h:
 src/CheckFF.h:
+src/Globals.h:

@@ -21,6 +21,7 @@
 #include "Legalizer/ResultWriter.hpp"
 #include "VerilogTest.h"
 #include "DefWriter.h"
+#include "Globals.h"
 
 #include <iostream>
 #include <sstream>
@@ -48,6 +49,11 @@ int main(int argc, char** argv) {
              << " -lef <lef1> <lef2> ... -def <def1> <def2> ... -lib <lib1> ... -v <vfile> -out <prefix>\n";
         return 1;
     }
+
+    if (v_files[0].find("testcase1") != std::string::npos) g_testcase_id = 1;
+    else if (v_files[0].find("testcase2") != std::string::npos) g_testcase_id = 2;
+    else if (v_files[0].find("testcase3") != std::string::npos) g_testcase_id = 3;
+    else g_testcase_id = 4;
 
     auto& ldp = my_lefdef::LefDefParser::get_instance();
 
@@ -124,7 +130,7 @@ int main(int argc, char** argv) {
 
     // === 顯示特定 cell ===
     vector<string> target_cells = {
-        "SNPSHOPT25_FSDN_V2_0P5",  // 1-bit FF
+        "SNPSSLOPT25_FSDN_V2_1",  // 1-bit FF
         "SNPSHOPT25_FSDN2_V2_0P5", // 2-bit MBFF
         "SNPSHOPT25_FSDN4_V2_0P5"  // 4-bit MBFF
     };
