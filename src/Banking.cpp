@@ -236,18 +236,37 @@ void Banking::run_big(const CompatMaps& maps,
     for (auto& c : clusters_) {
         std::vector<FlipFlop*> bits;
         c.computeCenter();
-
         for (auto* ff : c.getFFs()) bits.push_back(ff);
-        int n = (int)bits.size();
 
-        // ---- 4-bit banking ----
-        while (n >= 4) {
-            std::vector<FlipFlop*> sub(bits.end()-4, bits.end());
-            bits.erase(bits.end()-4, bits.end());
-            n -= 4;
+        auto emit_sb = [&](FlipFlop* ff){
+            MBFFGroup g;
+            g.id      = gid++;
+            g.macro   = ff->macro;        // 單顆沿用原 macro
+            g.bits    = { ff };
+            g.place_x = ff->new_x;
+            g.place_y = ff->new_y;
+            g.cost    = computeCost(g.macro, g.bits);
+            g.inst_name = ff->name + std::string("_sb");
+            auto pa = lib_.getFFPowerArea(g.macro);
+            g.area = pa.area;
+            if (auto lef_macro = lef::Lef::get_instance().get_macro(g.macro)) {
+                g.width  = lef_macro->size_x_;
+                g.height = lef_macro->size_y_;
+            } else {
+                g.width = g.height = 0.0;
+            }
+            mbff_groups_.push_back(std::move(g));
+            usedFF.insert(ff);
+        };
 
+        // ---- 4-bit banking：先試後擦 ----
+        while ((int)bits.size() >= 4) {
+            std::vector<FlipFlop*> sub(bits.end()-4, bits.end());   // peek 4
             std::string mb = pickMBFFMacro(sub, maps);
             if (!mb.empty()) {
+                // 成功才真的移除
+                bits.erase(bits.end()-4, bits.end());
+
                 MBFFGroup g;
                 g.id      = gid++;
                 g.macro   = mb;
@@ -256,34 +275,33 @@ void Banking::run_big(const CompatMaps& maps,
                 g.place_y = c.getCenterY();
                 g.cost    = computeCost(mb, sub);
                 g.inst_name = sub[0]->name + "_mb";
-
-                // === Step 4: 填充面積與尺寸 ===
                 auto pa = lib_.getFFPowerArea(mb);
                 g.area = pa.area;
-
-                auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
-                if (lef_macro) {
+                if (auto lef_macro = lef::Lef::get_instance().get_macro(g.macro)) {
                     g.width  = lef_macro->size_x_;
                     g.height = lef_macro->size_y_;
                 } else {
                     g.width = g.height = 0.0;
-                    std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
                 }
-
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub) usedFF.insert(ff);
+            } else {
+                // 這個家族沒有 4-bit（理論上 FSDN/LSRDPQ 都有），跳出嘗試
+                break;
             }
-
         }
 
-        // ---- 特判 3 → 2+1 ----
-        if (n == 3) {
-            std::vector<FlipFlop*> sub2(bits.end()-2, bits.end());
-            bits.erase(bits.end()-2, bits.end());
-            n -= 2;
+        // 重新取得 n
+        int n = (int)bits.size();
 
+        // ---- 特判 3：優先嘗試 2-bit，失敗就三顆都當 SB ----
+        if (n == 3) {
+            std::vector<FlipFlop*> sub2(bits.end()-2, bits.end());  // peek 2
             std::string mb = pickMBFFMacro(sub2, maps);
             if (!mb.empty()) {
+                // 成功 → 先產生 2-bit，再處理剩下 1 顆
+                bits.erase(bits.end()-2, bits.end());
+
                 MBFFGroup g;
                 g.id      = gid++;
                 g.macro   = mb;
@@ -292,35 +310,36 @@ void Banking::run_big(const CompatMaps& maps,
                 g.place_y = c.getCenterY();
                 g.cost    = computeCost(mb, sub2);
                 g.inst_name = sub2[0]->name + "_mb";
-
-                // === Step 4: 填充面積與尺寸 ===
                 auto pa = lib_.getFFPowerArea(mb);
                 g.area = pa.area;
-
-                auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
-                if (lef_macro) {
+                if (auto lef_macro = lef::Lef::get_instance().get_macro(g.macro)) {
                     g.width  = lef_macro->size_x_;
                     g.height = lef_macro->size_y_;
                 } else {
                     g.width = g.height = 0.0;
-                    std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
                 }
-
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub2) usedFF.insert(ff);
-            }
 
+                // 剩下一顆 → SB
+                emit_sb(bits.back());
+                bits.pop_back();
+            } else {
+                // 這個家族（如 LSRDPQ）沒有 2-bit → 三顆全走 SB，避免遺失
+                emit_sb(bits.back()); bits.pop_back();
+                emit_sb(bits.back()); bits.pop_back();
+                emit_sb(bits.back()); bits.pop_back();
+            }
             n = (int)bits.size();
         }
 
-        // ---- 2-bit banking ----
+        // ---- n == 2：嘗試 2-bit，失敗則兩顆都 SB ----
         if (n == 2) {
-            std::vector<FlipFlop*> sub(bits.end()-2, bits.end());
-            bits.erase(bits.end()-2, bits.end());
-            n -= 2;
-
+            std::vector<FlipFlop*> sub(bits.end()-2, bits.end());  // peek 2
             std::string mb = pickMBFFMacro(sub, maps);
             if (!mb.empty()) {
+                bits.erase(bits.end()-2, bits.end());
+
                 MBFFGroup g;
                 g.id      = gid++;
                 g.macro   = mb;
@@ -329,57 +348,29 @@ void Banking::run_big(const CompatMaps& maps,
                 g.place_y = c.getCenterY();
                 g.cost    = computeCost(mb, sub);
                 g.inst_name = sub[0]->name + "_mb";
-
-                // === Step 4: 填充面積與尺寸 ===
                 auto pa = lib_.getFFPowerArea(mb);
                 g.area = pa.area;
-
-                auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
-                if (lef_macro) {
+                if (auto lef_macro = lef::Lef::get_instance().get_macro(g.macro)) {
                     g.width  = lef_macro->size_x_;
                     g.height = lef_macro->size_y_;
                 } else {
                     g.width = g.height = 0.0;
-                    std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
                 }
-
                 mbff_groups_.push_back(std::move(g));
                 for (auto* ff : sub) usedFF.insert(ff);
-            }
-
-        }
-
-        // ---- 單顆 (可能換 cell type) ----
-        if (n == 1) {
-            FlipFlop* ff = bits.back();
-            bits.pop_back();
-
-            MBFFGroup g;
-            g.id      = gid++;
-            g.macro   = ff->macro;    // 直接沿用 pickMBFFMacro 給的 macro
-            g.bits    = { ff };
-            g.place_x = ff->new_x;
-            g.place_y = ff->new_y;
-            g.cost    = computeCost(g.macro, g.bits);
-            g.inst_name = ff->name + "_sb";
-
-            // === Step 4: 填充面積與尺寸 ===
-            auto pa = lib_.getFFPowerArea(g.macro);
-            g.area = pa.area;
-
-            auto lef_macro = lef::Lef::get_instance().get_macro(g.macro);
-            if (lef_macro) {
-                g.width  = lef_macro->size_x_;
-                g.height = lef_macro->size_y_;
             } else {
-                g.width = g.height = 0.0;
-                std::cerr << "[Warning] Cannot find LEF macro for " << g.macro << "\n";
+                // 家族沒有 2-bit（如 LSRDPQ）→ 兩顆都 SB
+                emit_sb(bits.back()); bits.pop_back();
+                emit_sb(bits.back()); bits.pop_back();
             }
-
-            mbff_groups_.push_back(std::move(g));
-            usedFF.insert(ff);
+            n = (int)bits.size();
         }
 
+        // ---- n == 1：SB ----
+        if (n == 1) {
+            emit_sb(bits.back());
+            bits.pop_back();
+        }
     }
 
     // ---- 加入 DEF 裡已有的 MBFF ----
