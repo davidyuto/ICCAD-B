@@ -13,8 +13,8 @@ else
   CXXFLAGS = -O3 -std=c++11
 endif
 
-# 自動相依檔
-CXXFLAGS += -MMD -MP
+# 自動相依檔 + pthread（建議同時放在編譯與連結）
+CXXFLAGS += -MMD -MP -pthread
 
 # === 來源檔 ===
 SRCS = main.cpp \
@@ -23,7 +23,6 @@ SRCS = main.cpp \
        $(wildcard util/*.cpp) \
        $(wildcard parser/util/*.cpp) \
        $(wildcard parser/common/*.cpp)
-
 
 # 扁平化輸出至 obj/
 OBJS = $(addprefix $(OBJS_DIR)/, $(notdir $(SRCS:%.cpp=%.o)))
@@ -38,16 +37,15 @@ INCLUDES = -Isrc -Iutil \
            -Iparser/util \
            -I/usr/local/include
 
-# === Library 路徑與連結 ===
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-  LDFLAGS = -L/usr/local/lib -Lparser/lib/osx                               \
-            -Wl,-rpath,@loader_path/parser/lib/osx
-else
-  LDFLAGS = -L/usr/local/lib -Lparser/lib/linux -no-pie                     \
-            -Wl,-rpath,'$$ORIGIN/parser/lib/linux'
-endif
-LIBS = -llef -ldef -lstdc++
+# === Library 路徑與連結（Linux 全靜態樣式） ===
+# 需要提供靜態庫：parser/lib/linux/liblef.a、libdef.a（或 /usr/local/lib 下的 .a）
+LDFLAGS = -static -no-pie -pthread \
+          -L/usr/local/lib -Lparser/lib/linux \
+          -Wl,--start-group
+LIBS    = -llef -ldef \
+          -Wl,--end-group \
+          -static-libstdc++ -static-libgcc \
+          -ldl -lm
 
 .SUFFIXES :
 
@@ -72,7 +70,11 @@ $(OBJS_DIR)/%.o:
 #-------------------------------------------------------------------------------
 # Utilities
 #-------------------------------------------------------------------------------
-.PHONY: clean
+.PHONY: clean strip
 clean:
-	rm -f cadb_1075_final
+	rm -f $(TARGET)
 	rm -rf $(OBJS_DIR)
+
+# 可選：縮小可執行檔體積
+strip:
+	strip $(TARGET)

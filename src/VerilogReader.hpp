@@ -63,7 +63,7 @@ private:
         // ([A-Za-z][A-Za-z0-9_]*) - 模塊名稱
         // ([A-Za-z0-9_]+) - 實例名稱（支持數字開頭和雙下劃線）
         std::regex instance_regex(R"(([A-Za-z][A-Za-z0-9_]*)\s+([A-Za-z0-9_]+)\s*\(\s*(.*?)\s*\)\s*;)", 
-                                 std::regex_constants::ECMAScript | std::regex_constants::multiline);
+                                 std::regex_constants::ECMAScript);
         std::smatch match;
         
         if (std::regex_search(instance_str, match, instance_regex)) {
